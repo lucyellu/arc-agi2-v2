@@ -1,9 +1,21 @@
 """Programmatic equivalent of the arcviewer's similarity stats.
 
-Computes per-attempt cell-match %, shape-match, exact-match against ground
-truth, plus baseline metrics (input-vs-output, attempt-vs-input — catches
-echo-input failures). Aggregates match the viewer's `stats.json` field names
-where possible so output is drop-in compatible.
+Three percentages live side by side in the output and they MEAN DIFFERENT
+THINGS — a high number is only "good" for one of them:
+
+    attempt -> output    target: 100%  (only 100% counts as correct)
+    attempt -> input     target: matches the input->output baseline
+                          (a correct attempt diverges from the input by
+                          exactly the amount the puzzle requires; an echo
+                          failure stays at ~100%)
+    input   -> output    intrinsic puzzle distance (informational baseline)
+
+The printed table separates these explicitly with arrow-direction column
+headers (a1->out%, a1->in%, in->out%) and a flag column (EXACT / CLOSE /
+ECHO / OFF / BLANK) so partial matches aren't misread as success.
+
+Aggregates match the viewer's `stats.json` field names where possible so
+JSON output stays drop-in compatible with the viewer.
 
 Usage:
     python tools/similarity_analysis.py <submission.json>
@@ -192,23 +204,55 @@ def aggregate(rows):
     }
 
 
+def attempt_flag(s, baseline):
+    """Diagnostic for a single attempt's metrics dict."""
+    if s["exact_match"]:
+        return "EXACT"
+    out = s["cell_match_pct"]
+    inp = s["echo_input_pct"]
+    if not s["is_real"]:
+        return "BLANK"
+    if inp > 0.95:
+        return "ECHO"
+    if out < baseline:
+        return "OFF"
+    if out > 0.9:
+        return "CLOSE"
+    return ""
+
+
 def print_summary(label, rows, agg):
     print(f"\n=== {label} ===")
     print(f"  subtests: {agg['total']}")
     print(f"  exact-match: a1={agg['s1Correct']}/{agg['total']}  a2={agg['s2Correct']}/{agg['total']}  best-of-2={agg['bestCorrect']}/{agg['total']}")
-    print(f"  avg cell match: a1={agg['s1AvgSim']:.3f}  a2={agg['s2AvgSim']:.3f}  best={agg['bestAvgSim']:.3f}")
+    print(f"  avg attempt->output: a1={agg['s1AvgSim']:.3f}  a2={agg['s2AvgSim']:.3f}  best={agg['bestAvgSim']:.3f}")
+    print(f"  avg attempt->input:  a1={agg['echoInputAvg_a1']:.3f}  a2={agg['echoInputAvg_a2']:.3f}  (baseline input->output: {agg['inputOutputBaseline']:.3f})")
     print(f"  attempts non-trivial: a1={agg['s1RealCount']}/{agg['total']}  a2={agg['s2RealCount']}/{agg['total']}")
-    print(f"  echo-input avg: a1={agg['echoInputAvg_a1']:.3f}  a2={agg['echoInputAvg_a2']:.3f}  (baseline input->output: {agg['inputOutputBaseline']:.3f})")
     print()
-    print(f"  {'human':<6} {'subtest':<14} {'a1_cell':>8} {'a2_cell':>8} {'best':>6} {'a1_ex':>6} {'a2_ex':>6} {'a1_real':>8}")
+    print("  Legend (% values):")
+    print("    a1->out% / a2->out%  attempt vs expected output (TARGET: 100% = correct)")
+    print("    a1->in%  / a2->in%   attempt vs input (echo check; for a correct attempt converges to in->out%, NOT 100%)")
+    print("    in->out%             input vs expected output (intrinsic transformation distance)")
+    print("    flag      EXACT | CLOSE (>90% to out, not exact) | ECHO (>95% to in) | OFF (<baseline to out) | BLANK")
+    print()
+    hdr = (
+        f"  {'human':<5} {'subtest':<14} "
+        f"{'a1->out%':>9} {'a2->out%':>9} {'in->out%':>9} "
+        f"{'a1->in%':>8} {'a2->in%':>8} "
+        f"{'a1_flag':>7} {'a2_flag':>7}"
+    )
+    print(hdr)
+    print("  " + "-" * (len(hdr) - 2))
     for r in rows:
+        baseline = r["input_to_output_pct"]
+        a1_flag = attempt_flag(r["a1"], baseline)
+        a2_flag = attempt_flag(r["a2"], baseline)
         print(
-            f"  {r['human_id']:<6} {r['subtest_id']:<14} "
-            f"{r['a1']['cell_match_pct']:>8.3f} {r['a2']['cell_match_pct']:>8.3f} "
-            f"{r['best_cell_match_pct']:>6.3f} "
-            f"{('Y' if r['a1']['exact_match'] else '.'):>6} "
-            f"{('Y' if r['a2']['exact_match'] else '.'):>6} "
-            f"{('Y' if r['a1']['is_real'] else '.'):>8}"
+            f"  {r['human_id']:<5} {r['subtest_id']:<14} "
+            f"{r['a1']['cell_match_pct']*100:>8.1f}% {r['a2']['cell_match_pct']*100:>8.1f}% "
+            f"{baseline*100:>8.1f}% "
+            f"{r['a1']['echo_input_pct']*100:>7.1f}% {r['a2']['echo_input_pct']*100:>7.1f}% "
+            f"{a1_flag:>7} {a2_flag:>7}"
         )
 
 
@@ -217,8 +261,11 @@ def diff_mode(rows_a, rows_b, label_a, label_b, out_path):
     lines = [
         f"# Diff: {label_a} vs {label_b}",
         "",
-        "| human | subtest | a_best_pct | b_best_pct | a_exact | b_exact | regression |",
-        "|---|---|---:|---:|---|---|---|",
+        "Columns are share of cells matching expected output (target 100% = correct). "
+        "`baseline` = intrinsic input-vs-output similarity for context — high baseline means the puzzle is near-identity and a high `->out%` may not be meaningful.",
+        "",
+        "| human | subtest | A best->out% | B best->out% | baseline | A exact | B exact | regression |",
+        "|---|---|---:|---:|---:|---|---|---|",
     ]
     a_only = b_only = both = 0
     for r in rows_a:
@@ -236,7 +283,8 @@ def diff_mode(rows_a, rows_b, label_a, label_b, out_path):
         regress = "A->B lost" if (a_ex and not b_ex) else ("B->A lost" if (b_ex and not a_ex) else "")
         lines.append(
             f"| {r['human_id']} | `{r['subtest_id']}` | "
-            f"{r['best_cell_match_pct']:.3f} | {b['best_cell_match_pct']:.3f} | "
+            f"{r['best_cell_match_pct']*100:.1f}% | {b['best_cell_match_pct']*100:.1f}% | "
+            f"{r['input_to_output_pct']*100:.1f}% | "
             f"{'Y' if a_ex else '.'} | {'Y' if b_ex else '.'} | "
             f"{regress} |"
         )
