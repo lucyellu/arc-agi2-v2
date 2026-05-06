@@ -1,7 +1,7 @@
 {
-  "id": "lucyellu/subprobs-vanilla120-r1",
-  "title": "subprobs_vanilla120_r1",
-  "code_file": "vanilla_chunked.ipynb",
+  "id": "lucyellu/subprobs-separated172-r1",
+  "title": "subprobs_separated172_r1",
+  "code_file": "subprobs-separated172-r1.ipynb",
   "language": "python",
   "kernel_type": "notebook",
   "is_private": true,
@@ -11,6 +11,7 @@
   "machine_shape": "NvidiaL4x4",
   "keywords": [],
   "dataset_sources": [
+    "lucyellu/arc-agi-2-separated-eval-172",
     "lucyellu/qwen3-4b-grids15-sft139-mirror"
   ],
   "kernel_sources": [

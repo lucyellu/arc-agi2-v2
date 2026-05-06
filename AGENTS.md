@@ -43,12 +43,7 @@ python infer_qwen.py `
   --attempts 3
 ```
 
-Launch viewer:
-
-```powershell
-cd tools
-python viewer_server.py
-```
+Submission viewer lives in the separate `lucyellu/arc-agi2-viewer` repo.
 
 ## Direction
 

@@ -58,22 +58,19 @@ python tools/save_kernel_run.py lucyellu/subprobs-separated172-r1 <Xs> chunk0
 - `arc-agi-2-separated-eval-172` v2 — 172-puzzle separated eval set with **random hex IDs** (seed=2602) mimicking the 120-eval ID format. Same input/output pairs as the original puzzles. Built by `scripts/build_separated_eval.py`.
 - `qwen3-4b-grids15-sft139-mirror` — mirror of sorokin's 4B weights (~7 GB), as a Dataset. Resolver in `arc_solver.py` finds it automatically once attached.
 
-### Local notebooks (only the 4 ACTIVE in `notebooks/`)
+### Local notebooks (active in `notebooks/`)
 
-- `notebooks/separated172_all.ipynb` — chunked separated runner.
-- `notebooks/vanilla_chunked.ipynb` — chunked vanilla baseline.
-- `notebooks/vanilla_nvarc_26score.ipynb` — original 4-dev-key vanilla (reference).
-- `notebooks/kaggle-v1-n8-r64-a16-nvarc-32-64-base.ipynb` — original 26.94 LB working base (reference).
+- `notebooks/subprobs-separated172-r1.ipynb` — chunked separated runner. Push folder: `notebooks/subprobs-separated172-r1-push/`. Kaggle slug: `lucyellu/subprobs-separated172-r1`.
+- `notebooks/subprobs-vanilla120-r1.ipynb` — chunked vanilla baseline. Push folder: `notebooks/subprobs-vanilla120-r1-push/`. Kaggle slug: `lucyellu/subprobs-vanilla120-r1`.
+- `notebooks/kaggle-v1-n8-r64-a16-nvarc-32-64-base.ipynb` — 26.94 LB working base. **Build dependency** — `_build_*_nb.py` reads `arc_loader.py` / `arc_decoder.py` / `arc_solver.py` cells from this. Don't move.
 
-(File names use the OLD prefixes for historical continuity, but the CONTENTS were rebuilt 2026-05-06 PM with the chunk-on-originals + multi-only + EarlyStopOnLowLoss design. The Kaggle slugs use the NEW `subprobs-*-r1` names.)
-
-Everything else is in `notebooks/archive/` — see `notebooks/archive/README.md`.
+Everything else is in `notebooks/archive/` (gitignored) — see `notebooks/archive/README.md`.
 
 ### Build / tooling
 
 - `tools/_solver_patches.py` — shared arc_solver patches: `apply_path_override`, `apply_model_resolver`, `apply_early_stop`. Both build scripts import from here.
 - `tools/_chunking.py` — shared `compute_chunk_mappings(chunk_size=4, multi_only=True)`. Both build scripts use it.
-- `tools/_build_sep172_all_nb.py` and `tools/_build_vanilla_chunked_nb.py` — produce the active notebooks. **Always edit these, never hand-edit the .ipynb JSON.**
+- `tools/_build_subprobs_separated172_r1_nb.py` and `tools/_build_subprobs_vanilla120_r1_nb.py` — produce the active notebooks. **Always edit these, never hand-edit the .ipynb JSON.** After rebuilding, also `cp` the active `.ipynb` into the matching `-push/` folder so `kaggle kernels push` ships the latest content.
 - `tools/dry_run_notebook.py` — local exec of any active notebook with subprocess + GPU phases stubbed; ~5 s. **Run before every push.**
 - `tools/save_kernel_run.py <owner>/<slug> <duration> <descriptor>` — packages a finished Kaggle run into `results/results_<slug>-<duration>-<descriptor>/`. Handles cp1252 emoji bug, pulls notebook source + log + outputs.
 - `tools/_fetch_log3.py` — UTF-8 workaround for the Kaggle CLI cp1252 bug on the unsloth 🦥 emoji.

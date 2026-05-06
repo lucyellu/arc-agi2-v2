@@ -34,14 +34,7 @@ python infer_qwen.py `
   --quant auto
 ```
 
-Launch the viewer:
-
-```powershell
-cd tools
-python viewer_server.py
-```
-
-Then open `http://localhost:8080/run_viewer.html`.
+Submission viewer lives in the separate `lucyellu/arc-agi2-viewer` repo.
 
 ## External Assets
 

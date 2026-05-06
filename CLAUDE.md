@@ -32,9 +32,7 @@ python infer_qwen.py `
   --output ../results/submissions/latest/qwen_submission.json `
   --attempts 3 --quant auto
 
-# Local submission viewer — http://localhost:8080/run_viewer.html
-cd tools
-python viewer_server.py
+# Local submission viewer — separate repo: lucyellu/arc-agi2-viewer
 ```
 
 Single-test invocation (the smoke tests use `unittest`):
@@ -78,12 +76,7 @@ The compact reusable code lives in `scripts/`:
 
 ### Viewer
 
-`tools/viewer_server.py` is a minimal stdlib HTTP server. Two endpoints:
-
-- `/api/list-latest` — lists `results/submissions/latest/*.json` plus the bundled eval challenges/solutions
-- `/api/file/<name>` and `/api/file-bundled/<name>` — serve the JSON
-
-Front end is `tools/run_viewer.html` (and `arc_viewer.html`, `evaluate_attempts.html`). Open via the server, not `file://`.
+The submission viewer (HTTP server + HTML pages) lives in a separate repo: `lucyellu/arc-agi2-viewer`. Point it at this repo's `results/submissions/latest/` directory.
 
 ### Results layout
 

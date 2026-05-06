@@ -23,7 +23,7 @@ CHUNK_TO_ORIGINALS, CHUNK_TO_SEPARATED, N_CHUNKS = compute_chunk_mappings(
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / "notebooks" / "kaggle-v1-n8-r64-a16-nvarc-32-64-base.ipynb"
-OUT = ROOT / "notebooks" / "separated172_all.ipynb"
+OUT = ROOT / "notebooks" / "subprobs-separated172-r1.ipynb"
 
 base_nb = json.loads(BASE.read_text(encoding="utf-8"))
 base_cells = base_nb["cells"]

@@ -22,9 +22,6 @@ notebooks/reference/
 results/archive/
 notebooks/archive/
 
-# Local checkout of the dedicated viewer repo (lucyellu/arc-agi2-viewer).
-arc-agi2-viewer/
-
 *.log
 *.bz2
 *.pkl
