@@ -13,7 +13,7 @@ Live status. Update when something completes or changes status. Sister doc: `PLA
 **Status as of chunks 0+1+2:** Two-axis comparison, not a single "winner":
 
 - **Accuracy:** vanilla 4/25 (16%), separated 3/25 (12%). Single-subtest difference comes entirely from `20270e3b_1` (chunk 1), which vanilla solved on attempt_2 and separated missed. Every other solved subtest is a tie. **No "vanilla miss → separated solve" datapoints yet.**
-- **Wall time:** separated 19 min vs vanilla 28 min on chunk 2, but only because vanilla idled 3 of 4 workers. At 240-puzzle scale workers saturate; vanilla likely ~9h vs separated ~10h. Both fit 12h. Hybrid speed argument is weak; only an accuracy win where vanilla misses would justify it (none yet).
+- **Wall time:** separated 19 min vs vanilla 28 min on chunk 2, but only because vanilla idled 3 of 4 workers. At 240-puzzle scale workers saturate. Empirical reference: base notebook does the full set in ~3–4h on L4x4. Realistic r2: vanilla ~4h, separated ~5h. Both well under 12h. Hybrid speed argument is weak; only an accuracy win where vanilla misses would justify it (none yet).
 
 See "Verified findings" below for per-chunk detail.
 
@@ -23,7 +23,7 @@ Nothing — chunks 0+1+2 packaged. Next push is chunk 3 (problems 13–16: `36a0
 
 ## Leaderboard environment
 
-4× L4 GPUs, 12h wall, 240 hidden tasks (120 semi-private + 120 private), no internet. Same hardware as dev runs. Source: https://arcprize.org/competitions/2026/arc-agi-2. Blocker before submitting: `RUN_HOURS=3.0/4.0` defaults are sized for 4-puzzle chunks; need bumped to ~10h for rerun.
+4× L4 GPUs, 12h wall, 240 hidden tasks (120 semi-private + 120 private), no internet. Same hardware as dev runs. Source: https://arcprize.org/competitions/2026/arc-agi-2. Empirical: the base notebook completes the full set in ~3–4h. Blocker before submitting: `RUN_HOURS=3.0/4.0` defaults are tight against that — bump to ~6h vanilla / ~7h separated for safety margin.
 
 ## Verified findings (with dates)
 

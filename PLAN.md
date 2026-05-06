@@ -8,11 +8,11 @@ Open questions and next experiments. Sister doc: `STATE.md` (current status, art
 
 2. **Is the selection algorithm sometimes the bottleneck?** Yes — confirmed on `1ae2feb7_1` (chunk 1 vanilla) where the right answer was at rank 7. Chunks 0 and 2 had 0/16 discarded, so the rate is puzzle-dependent. Worth a separate experiment: bump `n_guesses=2` to 3 or 5 and see if a few discarded answers get recovered cheaply.
 
-3. **Is separated faster than vanilla?** At small N (chunk 2, 4 puzzles on 4 workers): yes, 19 vs 28 min — but only because vanilla idled 3 workers. At leaderboard scale (240 on 4): no, workers saturate and separated's extra TTT cost makes it slightly slower (~10h vs ~9h max-worker, both fitting 12h). Time-advantage hybrid argument is weak; defer until accuracy data from chunks 3–12.
+3. **Is separated faster than vanilla?** At small N (chunk 2): yes, 19 vs 28 min — but only because vanilla idled 3 workers. At leaderboard scale: no — empirical base completes 240 in ~3–4h; separated would add ~1h for extra TTT (no amortization). Both fit 12h easily. Time-advantage hybrid argument is weak; defer until accuracy data from chunks 3–12.
 
 4. **Why don't `[EarlyStopOnLowLoss]` diagnostic prints appear in r1/r2 logs?** The class is in the .ipynb source, `callbacks=[EarlyStopOnLowLoss(...)]` is wired, training losses (0.017–0.162) cross the 0.05 threshold, but the callback's print never reaches the log. Either Unsloth's `UnslothFixedTrainer` filters callbacks, or `on_log` isn't called by the Unsloth-monkeypatched trainer. Tuning the threshold blind is unwise until understood.
 
-5. **What budgets survive the 12h rerun?** Both kernels fit (vanilla ~9h, separated ~10h). The blocker is `RUN_HOURS=3.0/4.0` defaults — sized for 4-puzzle chunks; would cap rerun and skip remaining tasks. Bump to ~10h in rerun mode. `puzzle_timeout=2400s` is fine.
+5. **What budgets survive the 12h rerun?** Empirical: base notebook completes full 240 in ~3–4h on L4x4. r2 vanilla ≈ same (~4h); separated adds ~1h for extra TTT (~5h). Both fit 12h easily. Bump `RUN_HOURS` to ~6h vanilla / ~7h separated for margin (env override in rerun mode). `puzzle_timeout=2400s` is fine.
 
 ## Next experiments (priority order)
 
@@ -78,7 +78,7 @@ Useful before tuning the threshold or relying on early stopping for the leaderbo
 
 The r2 notebooks already detect `KAGGLE_IS_COMPETITION_RERUN` and produce a 240-shape `submission.json`. Outstanding:
 
-- Bump `RUN_HOURS` to ~10h in rerun mode (env override in `cell_run_src` or build-time conditional). Without this, dev cap fires at 3-4h and skips remaining tasks.
+- Bump `RUN_HOURS` for rerun mode (env override in `cell_run_src` or build-time conditional): ~6h vanilla / ~7h separated. Empirical base runtime is ~3–4h on full set; defaults of 3.0/4.0 are too tight.
 - Manual web-UI attach on the submission slug.
 - **Plan: submit both kernels** (user 2026-05-06) — math too close to predict; let the leaderboard resolve empirically.
 
