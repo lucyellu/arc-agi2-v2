@@ -1,4 +1,4 @@
-# Discarded-answer analysis — results_subprobs-separated172-r1-713s-chunk1
+# Discarded-answer analysis — results_subprobs-chunk1-separated172-r1-713s
 
 **Question:** for each subtest, did the decoder ever produce the correct grid as one of its candidates? If yes, was it ranked in the top-2 (the attempts we submit) or discarded below that?
 

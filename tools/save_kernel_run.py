@@ -40,7 +40,15 @@ def main():
     args = ap.parse_args()
 
     owner, slug = args.kernel.split("/", 1)
-    folder_name = f"results_{slug}-{args.descriptor}-{args.duration}"
+    # For "subprobs-..." kernels, place the descriptor (e.g., chunk2) right
+    # after the "subprobs-" prefix so chunks group together when sorted:
+    #   results_subprobs-chunk0-vanilla120-r1-1187s
+    # Other prefixes fall back to the older slug-descriptor-duration order.
+    slug_head, _, slug_tail = slug.partition("-")
+    if slug_head == "subprobs" and slug_tail:
+        folder_name = f"results_subprobs-{args.descriptor}-{slug_tail}-{args.duration}"
+    else:
+        folder_name = f"results_{slug}-{args.descriptor}-{args.duration}"
     out = ROOT / "results" / folder_name
     out.mkdir(parents=True, exist_ok=True)
     print(f"Target: {out}")
@@ -77,7 +85,10 @@ def main():
     )
     # `kernels pull` saves as <slug>.ipynb (with hyphens not underscores).
     pulled = out / f"{slug}.ipynb"
-    target = out / f"{slug}-{args.descriptor}-{args.duration}.ipynb"
+    if slug_head == "subprobs" and slug_tail:
+        target = out / f"subprobs-{args.descriptor}-{slug_tail}-{args.duration}.ipynb"
+    else:
+        target = out / f"{slug}-{args.descriptor}-{args.duration}.ipynb"
     if pulled.exists() and pulled != target:
         shutil.move(str(pulled), str(target))
     # Some kernels save with underscored variants — handle both.

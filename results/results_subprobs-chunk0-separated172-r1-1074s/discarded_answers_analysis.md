@@ -1,4 +1,4 @@
-# Discarded-answer analysis — results_subprobs-vanilla120-r1-1187s-chunk0
+# Discarded-answer analysis â€” results_subprobs-chunk0-separated172-r1-1074s
 
 **Question:** for each subtest, did the decoder ever produce the correct grid as one of its candidates? If yes, was it ranked in the top-2 (the attempts we submit) or discarded below that?
 
@@ -11,15 +11,15 @@
 
 | subkey | aug files | candidates | unique grids | correct rank | in top-2 | anywhere | discarded |
 |---|---:|---:|---:|---:|---|---|---|
-| `13e47133_0` | 3 | 3 | 3 | — |  |  |  |
-| `142ca369_0` | 6 | 6 | 5 | — |  |  |  |
-| `142ca369_1` | 13 | 14 | 8 | — |  |  |  |
-| `16de56c4_1` | 2 | 2 | 2 | — |  |  |  |
-| `195c6913_0` | 1 | 1 | 1 | — |  |  |  |
-| `195c6913_1` | 2 | 2 | 1 | — |  |  |  |
+| `4c152ff6_0` | 2 | 2 | 2 | â€” |  |  |  |
+| `6fb0dedc_0` | 1 | 1 | 1 | â€” |  |  |  |
+| `7efba8d5_0` | 9 | 10 | 5 | â€” |  |  |  |
+| `90e2b499_0` | 1 | 1 | 1 | â€” |  |  |  |
+| `d3b1d067_0` | 3 | 3 | 3 | â€” |  |  |  |
+| `fbd3d3b9_0` | 12 | 14 | 8 | â€” |  |  |  |
 
 ## Interpretation
 
 No correct answers found in any candidate list. Pure capability/budget failures, not selection.
 
-Candidate-count breadth is also informative: a subtest with only 1–3 unique grids was under-explored (decode budget hit, max_score threshold too tight, or DFS branches died early). Subtests with 12+ unique grids that still missed are pure capability failures — the model explored a wide search but couldn't find the answer.
+Candidate-count breadth is also informative: a subtest with only 1â€“3 unique grids was under-explored (decode budget hit, max_score threshold too tight, or DFS branches died early). Subtests with 12+ unique grids that still missed are pure capability failures â€” the model explored a wide search but couldn't find the answer.
