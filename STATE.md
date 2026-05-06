@@ -6,40 +6,46 @@ Live status. Update when something completes or changes status. Sister doc: `PLA
 
 **Question:** Does isolating multi-test ARC puzzles into single-test pseudo-puzzles (each with its own fresh TTT fine-tune) recover any subtests that vanilla grouped NVARC misses?
 
-**Why it might:** vanilla TTT shares one fine-tune across all of a multi-test puzzle's subtests, plus shares the per-puzzle 1200 s decode cap. Isolation gives each subtest its own fine-tune and its own full budget.
+**Why it might:** vanilla TTT shares one fine-tune across all of a multi-test puzzle's subtests, plus shares the per-puzzle decode cap. Isolation gives each subtest its own fine-tune and its own full budget.
 
-**Why it might not:** if vanilla failures on multi-test puzzles are capability-bound rather than budget-bound, isolation gains nothing. Discarded-answer analysis already confirmed the decoder selection algo is *not* the bottleneck — when we miss, the model never produced the right grid.
+**Why it might not:** if vanilla failures on multi-test puzzles are capability-bound rather than budget-bound, isolation gains nothing.
 
-## Pending Kaggle runs (in flight as of 2026-05-06 PM)
+**Status as of chunks 0+1+2:** Vanilla is **ahead** (vanilla 2/17 across chunks 0+1, separated 3/25 across chunks 0+1+2 with vanilla chunk 2 still running). No "vanilla miss → separated solve" datapoints yet. Tentative read: capability-bound on most chunk 0 puzzles, then chunks 1+2 surfaced wins both arms split fairly. See "Verified findings" below.
 
-Both running on v1 of new slugs. Same chunk 0 content (4 multi-test originals: `13e47133`, `142ca369`, `16de56c4`, `195c6913`). Vanilla produces 8 subtest results (grouped processes whole puzzle); separated produces 8 separated-puzzle results (one per subtest).
+## In flight
 
-| Kernel | What it tests | Expected wall clock |
-|---|---|---|
-| `lucyellu/subprobs-vanilla120-r2` | Vanilla grouped baseline on those 4 multi originals | ~16–22 min |
-| `lucyellu/subprobs-separated172-r2` | Separated isolation on those 4 originals' 8 subtests | ~25–35 min |
+Nothing — chunks 0+1+2 packaged. Next push is chunk 3 (problems 13–16: `36a08778`, `38007db0`, `3a25b0d8`, `3e6067c3`).
 
-### Pickup commands when they complete
+## Verified findings (with dates)
 
-```powershell
-PYTHONIOENCODING=utf-8 kaggle kernels status lucyellu/subprobs-vanilla120-r2
-PYTHONIOENCODING=utf-8 kaggle kernels status lucyellu/subprobs-separated172-r2
+### Pre-r2 (OLD chunking design — r1 superseded)
 
-# Package each completed run:
-python tools/save_kernel_run.py lucyellu/subprobs-vanilla120-r2 <Xs> chunk0
-python tools/save_kernel_run.py lucyellu/subprobs-separated172-r2 <Xs> chunk0
-```
+- **2026-05-06 — `36a08778` solved 2/2 by vanilla NVARC grouped.** Re-scored from `separated172-36a08778` v8. Implication: prior assumption "vanilla fails multi-test ~99%" was wrong on the working 26.94 base.
+- **OLD `vanilla-chunked` chunks 0/1**: 1/5 then 0/5. Discarded analysis: 0/8 right answers hidden in candidate list — selection algo NOT the bottleneck on those puzzles. Key quirk: `13e47133[1]` not attempted on chunk 0 (per-puzzle 1200s cap fired) — concrete budget-starvation evidence. Forensics in `results/archive/`.
 
-### Sanity checks to run after results land
+### r1 design (chunks 0+1, original budget — now superseded)
 
-1. **Mirror model loaded:** log should print `Using mirror model: /kaggle/input/datasets/lucyellu/qwen3-4b-grids15-sft139-mirror` AND worker subprocesses should print `[model] using AGI2_MODEL_PATH override: ...`.
-2. **EarlyStopOnLowLoss firing:** if any puzzle is "easy", expect `[Early stop] step N loss=...` lines in the worker output.
-3. **Vanilla determinism cross-check:** vanilla chunk 0 should produce the same `13e47133`, `142ca369` results as the OLD `vanilla-chunked` chunk 0/1 runs (now in `results/archive/`). Differences would indicate the new chunking or early-stop changed inference outcome — worth investigating.
-4. **Pairing analysis (the actual experiment):** for each of the 8 multi-test subtests in chunk 0, compare vanilla grouped result vs separated result. Look for:
-   - Both wrong → capability-bound
-   - Vanilla wrong, separated correct → **isolation helped** (the result we're hunting)
-   - Vanilla correct, separated wrong → isolation hurt (regression)
-   - Both correct → no signal (vanilla solved it already)
+- **r1 chunk 0 (8 subtests, 4 multi-test originals `13e47133`/`142ca369`/`16de56c4`/`195c6913`):** vanilla 0/8, separated 0/8. Capability-bound across the board. 0 discarded right answers in either run.
+- **r1 chunk 1 (9 subtests, 4 originals `1ae2feb7` n=3 / `20270e3b` / `20a9e565` / `21897d95`):** vanilla 2/9, separated 1/9.
+  - Both got `1ae2feb7_2` (5c).
+  - Vanilla got `20270e3b_1` (6b) via attempt_2; separated missed.
+  - **`1ae2feb7_1` had right answer at rank 7 in vanilla (DISCARDED).** First confirmed selection-algo failure — chunk 0 was 0 discarded, chunk 1 had this 1 case. Selection bottleneck IS sometimes real.
+  - `21897d95` skipped by both runs (content fast-bail).
+  - Separated did NOT auto-attach the mirror dataset on r1; ran on sorokin's mount. Same weights, but a sanity-check failure that motivated r2.
+
+### r2 design (chunk 2, doubled budget — current)
+
+- **r2 chunk 2 separated (8 subtests, originals `221dfab4`/`247ef758`/`269e22fb`/`2d0172a1`):** **2/8 — both subtests of `2d0172a1` (problem 12)** via attempt_1, rank 1 each. 8/8 attempted (no skips — `apply_puzzle_timeout` fix paid off). Mirror loaded correctly. 0/8 discarded. Wall 18.9 min.
+- **r2 chunk 2 vanilla:** **2/8 — same `2d0172a1` both subtests, both attempt_1.** 8/8 attempted, 0/8 discarded. Wall 28.2 min. Per-puzzle finishes: `269e22fb` 4.7m, `247ef758` 6.8m, `2d0172a1` 7.3m, **`221dfab4` 22.0m** — single hard puzzle bottlenecked the wall (TTT only 62s; the 21 min was DFS decode, hitting the new 1080s cap).
+- **Chunk 2 net:** both arms tied at 2/8. No isolation gain, no regression. Same puzzle solved both times. Per-subtest avg time: vanilla ~14 min, separated ~9.5 min — separated 50% faster on the same content because subtests parallelize across workers instead of serializing inside a single puzzle.
+
+### Cumulative (chunks 0+1+2)
+
+- Vanilla: 4/25 (16%) — `1ae2feb7_2`, `20270e3b_1` (chunk 1); `2d0172a1_0`, `2d0172a1_1` (chunk 2).
+- Separated: 3/25 (12%) — `1ae2feb7_2` (chunk 1); `2d0172a1_0`, `2d0172a1_1` (chunk 2).
+- Per-puzzle: of the 12 multi-test originals attempted, 3 had at least one subtest solved (`1ae2feb7`, `20270e3b`, `2d0172a1`); the other 9 were all-miss in both arms.
+- **No "vanilla miss → separated solve" cases yet.** One regression (`20270e3b_1` vanilla solved, separated missed).
+- **Separated is faster per-unit-of-work** but covers the same accuracy. Hybrid time-advantage hypothesis (PLAN.md P5) deferred until more chunks land.
 
 ## Active artifacts
 
@@ -47,98 +53,84 @@ python tools/save_kernel_run.py lucyellu/subprobs-separated172-r2 <Xs> chunk0
 
 | slug | purpose | status |
 |---|---|---|
-| `subprobs-vanilla120-r2` | Vanilla NVARC (grouped) on 120-eval, NEW design: doubled budget (puzzle 2400s, DFS 1080s), RUN_HOURS 3.0, rerun-mode branching, submission_vanilla120_chunk{N}.json + submission.json outputs, human-id reports. | active |
-| `subprobs-separated172-r2` | Same NEW design for separated. RUN_HOURS 4.0, rerun-mode builds separated set inline from arc-agi_test_challenges.json, submission_sep172_chunk{N}.json (human-keyed) + submission.json. | active |
-| `subprobs-vanilla120-r1` | OLD design (1.5h, 1200s puzzle cap). Last version v3 = chunk 1, 2/9 correct. Historical. | superseded |
-| `subprobs-separated172-r1` | OLD design (2.0h, 1200s puzzle cap, mirror dataset never auto-attached). v3 = chunk 1, 1/9 correct. Historical. | superseded |
-| `kaggle-v1-n8-r64-a16-nvarc-32-64-base` | Working 26.94 LB reference. Don't modify. | reference |
-| `vanilla-chunked` | OLDEST slug, superseded by r1 then r2. Orphaned. | orphaned |
-| `separated172-all` | OLDEST slug, superseded by r1 then r2. Orphaned. | orphaned |
+| `subprobs-vanilla120-r2` | Vanilla NVARC (grouped). r2 design: puzzle_timeout 2400s, DFS 1080s, RUN_HOURS 3.0, rerun-mode branch, submission_vanilla120_chunk{N}.json + submission.json. | **active** |
+| `subprobs-separated172-r2` | Separated. r2 design: RUN_HOURS 4.0, rerun builds separated set inline, submission_sep172_chunk{N}.json human-keyed + submission.json. | **active** |
+| `subprobs-vanilla120-r1` | r1 (1.5h, 1200s puzzle cap). Last v3 = chunk 1, 2/9. | superseded |
+| `subprobs-separated172-r1` | r1 (2.0h, 1200s, mirror never auto-attached). v3 = chunk 1, 1/9. | superseded |
+| `kaggle-v1-n8-r64-a16-nvarc-32-64-base` | 26.94 LB working base. Don't modify. | reference |
+| `vanilla-chunked` / `separated172-all` | OLDEST (pre-r1). | orphaned |
 
 ### Kaggle datasets (lucyellu/)
 
-- `arc-agi-2-separated-eval-172` v2 — 172-puzzle separated eval set with **random hex IDs** (seed=2602) mimicking the 120-eval ID format. Same input/output pairs as the original puzzles. Built by `scripts/build_separated_eval.py`.
-- `qwen3-4b-grids15-sft139-mirror` — mirror of sorokin's 4B weights (~7 GB), as a Dataset. Resolver in `arc_solver.py` finds it automatically once attached.
+- `arc-agi-2-separated-eval-172` v2 — 172 separated subtests with random hex IDs (seed=2602). Built by `scripts/build_separated_eval.py`.
+- `qwen3-4b-grids15-sft139-mirror` — sorokin's 4B weights mirror (~7 GB). **Manual web-UI attach required** for new kernel slugs (metadata `dataset_sources` doesn't auto-attach).
 
 ### Local notebooks (active in `notebooks/`)
 
-- `notebooks/subprobs-separated172-r2.ipynb` — chunked separated runner. Push folder: `notebooks/subprobs-separated172-r2-push/`. Kaggle slug: `lucyellu/subprobs-separated172-r2`.
-- `notebooks/subprobs-vanilla120-r2.ipynb` — chunked vanilla baseline. Push folder: `notebooks/subprobs-vanilla120-r2-push/`. Kaggle slug: `lucyellu/subprobs-vanilla120-r2`.
-- `notebooks/kaggle-v1-n8-r64-a16-nvarc-32-64-base.ipynb` — 26.94 LB working base. **Build dependency** — `_build_*_nb.py` reads `arc_loader.py` / `arc_decoder.py` / `arc_solver.py` cells from this. Don't move.
+- `notebooks/subprobs-vanilla120-r2.ipynb` + push folder + slug `lucyellu/subprobs-vanilla120-r2`.
+- `notebooks/subprobs-separated172-r2.ipynb` + push folder + slug `lucyellu/subprobs-separated172-r2`.
+- `notebooks/kaggle-v1-n8-r64-a16-nvarc-32-64-base.ipynb` — build dependency (read by `_build_*_nb.py`). Don't move.
 
-Everything else is in `notebooks/archive/` (gitignored) — see `notebooks/archive/README.md`.
+`notebooks/archive/` and `notebooks/reference/` are gitignored.
 
 ### Build / tooling
 
-- `tools/_solver_patches.py` — shared arc_solver patches: `apply_path_override`, `apply_model_resolver`, `apply_early_stop`. Both build scripts import from here.
-- `tools/_chunking.py` — shared `compute_chunk_mappings(chunk_size=4, multi_only=True)`. Both build scripts use it.
-- `tools/_build_subprobs_separated172_r2_nb.py` and `tools/_build_subprobs_vanilla120_r2_nb.py` — produce the active notebooks. **Always edit these, never hand-edit the .ipynb JSON.** After rebuilding, also `cp` the active `.ipynb` into the matching `-push/` folder so `kaggle kernels push` ships the latest content.
-- `tools/dry_run_notebook.py` — local exec of any active notebook with subprocess + GPU phases stubbed; ~5 s. **Run before every push.**
-- `tools/save_kernel_run.py <owner>/<slug> <duration> <descriptor>` — packages a finished Kaggle run into `results/results_<slug>-<duration>-<descriptor>/`. Handles cp1252 emoji bug, pulls notebook source + log + outputs.
-- `tools/_fetch_log3.py` — UTF-8 workaround for the Kaggle CLI cp1252 bug on the unsloth 🦥 emoji.
-- `tools/_dump_kaggle_log.py`, `tools/_dump_cell.py`, `tools/_inspect_nb.py` — diagnostic helpers.
-- `tools/analyze_discarded_answers.py <results_dir>` — checks if any candidate solutions matched the answer but were ranked below #2.
-- `scripts/build_separated_eval.py` — regenerates the separated dataset. Use `--seed 2602` for reproducibility.
-- `scripts/mirror_qwen_models.py` — download sorokin's models + upload as Kaggle Models or Datasets. Note: Model API path needs `licenseName` field; Dataset path is what we used for the 4B mirror.
+- `tools/_solver_patches.py` — patches: `apply_path_override`, `apply_model_resolver`, `apply_early_stop`, `apply_puzzle_timeout`. Both build scripts apply all four.
+- `tools/_chunking.py` — `compute_chunk_mappings(chunk_size=4, multi_only=True)` → 49 multi-test originals split into 13 chunks of 4.
+- `tools/_problem_index.py` — bidirectional `<pid>_<test_idx>` ↔ human index (`1a`, `5c`, `12b`). Baked into both notebooks at build time.
+- `tools/_build_subprobs_vanilla120_r2_nb.py` and `tools/_build_subprobs_separated172_r2_nb.py` — produce the active notebooks. After rebuilding, `cp` the active `.ipynb` into the matching `-push/` folder.
+- `tools/dry_run_notebook.py` — local exec with subprocess + GPU stubbed; ~5 s. Run before every push.
+- `tools/save_kernel_run.py <slug> <duration> <descriptor>` — packages a finished Kaggle run. Naming: `results_subprobs-<descriptor>-<rest>-<duration>` so chunks group when sorted.
+- `tools/analyze_discarded_answers.py` — selection-algo diagnostics (rank of correct answer if produced).
+- `tools/similarity_analysis.py` — viewer-equivalent metrics with EXACT/CLOSE/ECHO/OFF/BLANK flags. Diff mode for two-submission comparison.
+- `tools/merge_submissions.py` — combines per-chunk full-120-shape `submission.json` files into one leaderboard-ready file.
+- `tools/_fetch_log3.py` — UTF-8 workaround for Kaggle CLI's cp1252 emoji crash.
+- `scripts/build_separated_eval.py` — regenerates the separated dataset (`--seed 2602`).
+- `scripts/mirror_qwen_models.py` — download + Kaggle Dataset upload of sorokin's weights.
 
 ### Local data
 
-- `data/arc-prize-2026-arc-agi-2/` — official 120 eval + 240 test data.
-- `data/arc-agi-2-separated-eval-172/` — local source-of-truth for the separated set (latest: random IDs, seed=2602).
-- `data/mirrors/4b_*/` — local copies of the qwen3 4B weights (already uploaded; can delete to free ~14 GB).
+- `data/arc-prize-2026-arc-agi-2/` — official 120 eval + 240 test.
+- `data/arc-agi-2-separated-eval-172/` — local source-of-truth for the separated set.
+- `data/mirrors/4b_*/` — local copies of qwen3 4B weights (already uploaded; ~14 GB, deletable).
 
 ### Saved run results
 
-- `results/archive/results_vanilla-chunked-chunk0-all-1415.9s/` — vanilla chunk 0 (sorokin), 1/5 correct. **OLD chunking design.** Originals: `0934a4d8`, `135a2760`, `136b0064`, `13e47133`. Under new multi-only design, only `13e47133` is multi (the other 3 are excluded). Discarded-answer analysis included.
-- `results/archive/results_vanilla-chunked-chunk1-mirror-1297.97s/` — vanilla chunk 1 (mirror), 0/5 correct. **OLD chunking design.** Originals: `13e47133` (redundant), `142ca369`, `16b78196`. Under new design, `13e47133` and `142ca369` are multi-only (chunk 0 of new design). Discarded-answer analysis included.
-- Both folders have `vanilla-chunked.log`, the notebook source, full `grouped_outputs/` bz2 dumps, and a `discarded_answers_analysis.{json,md}`.
+Active forensics in `results/`:
+- `results_subprobs-chunk0-vanilla120-r1-1187s/` — 0/8 (capability-bound, 0 discarded).
+- `results_subprobs-chunk0-separated172-r1-1074s/` — 0/8.
+- `results_subprobs-chunk1-vanilla120-r1-781s/` — 2/9 (5c, 6b).
+- `results_subprobs-chunk1-separated172-r1-713s/` — 1/9 (5c).
+- `results_subprobs-chunk2-separated172-r2-1135s/` — 2/8 (12a, 12b).
 
-## Verified findings (with dates)
+Older forensics in `results/archive/` (gitignored). Includes pre-r1 `vanilla-chunked-*` runs and `kaggle_multitest_failure_*` snapshots.
 
-- **2026-05-06 — `36a08778` is solved 2/2 by vanilla NVARC grouped.** Verified by re-scoring `submission_grouped.json` from `separated172-36a08778` v8 against `arc-agi_evaluation_solutions.json`. Implication: my prior assumption "vanilla fails multi-test ~99% of the time" was wrong; the v18-era 1/101 stat from state notes does not apply to the working 26.94 base.
+## Recurring Kaggle quirks
 
-- **2026-05-06 — separated172-all chunk 0 (OLD design): 1/4 correct.** Pipeline working end-to-end. `135a2760_0` correct; `0934a4d8_0` and `13e47133_0` wrong; `136b0064_0` produced no real attempt (worker fast-bailed in 66 s — content quirk, reproduces in grouped too). End-to-end pipeline confirmed.
-
-- **2026-05-06 — vanilla-chunked chunk 0 grouped (OLD design): 1/5 correct.**
-  - Single-test puzzles (`0934a4d8`, `135a2760`, `136b0064`) match separated chunk 0 outcome-for-outcome (sanity check passed; grouped == separated for n=1).
-  - `13e47133[0]` wrong (matches separated).
-  - **`13e47133[1]` was NOT attempted — budget starvation.** Worker hit the per-puzzle 1200 s decode cap before getting to test[1]. Concrete evidence the grouped budget asymmetry is real.
-
-- **2026-05-06 — vanilla-chunked chunk 1 grouped (OLD design, mirror model): 0/5 correct.**
-  - Mirror model verified working (`[model] using AGI2_MODEL_PATH override: ...` logged).
-  - With smaller queue (3 puzzles vs 4 in chunk 0), `13e47133[1]` *did* get attempted — but still wrong. So `13e47133[1]` isn't purely budget-bound.
-  - `142ca369` (n=2) and `16b78196` (n=1) all wrong.
-
-- **2026-05-06 — discarded-answer analysis on 8 subtests with inference output:**
-  - 1/8 correct in top-2 (just `135a2760`).
-  - **0/8 had the right answer hidden in the candidate list.** Decoder selection algo NOT the bottleneck.
-  - Candidate-count breadth varies wildly (1–22 unique grids). Some failures under-explored, some well-explored without finding answer. Both budget AND capability are at play.
-
-## Recurring Kaggle quirks (gotchas)
-
-- `model_sources` declared in `kernel-metadata.json` may not auto-attach on **new** kernel slugs. Workaround: `_resolve_model_path()` in `arc_solver.py` tries 10 known mount paths + globs for the model's `config.json`.
-- `dataset_sources` likewise can land at unexpected paths (e.g. `/kaggle/input/datasets/<owner>/<slug>/...`). Glob fallback in cell-4 finder handles it.
+- `model_sources` / `dataset_sources` in `kernel-metadata.json` may not auto-attach on **new** kernel slugs. Manual web-UI attach. Resolver in `arc_solver.py` covers ~10 known mount paths.
 - `machine_shape: NvidiaL4x4` is sometimes silently downgraded to single L4. Check via `kaggle kernels pull -m`.
-- Unsloth import in a second subprocess crashes if the first run's `unsloth_compiled_cache/` and `__pycache__/` are still present. Clean them between phases.
-- Kaggle CLI on Windows fails to write log files containing the unsloth 🦥 emoji (cp1252 codec). Use `tools/save_kernel_run.py` or `tools/_fetch_log3.py`.
-- `kaggle kernels output` only fetches the LATEST version's session output. For older versions, use `kaggle kernels files` to confirm files exist, download via web UI, or use `tools/_fetch_kernel_version.py`.
-- Kaggle Models API upload needs `licenseName` field; Dataset upload doesn't. Use Datasets for our mirrors.
+- Unsloth import in a second subprocess crashes with stale `unsloth_compiled_cache/` and `__pycache__/`. Clean between phases.
+- Kaggle CLI on Windows fails to write log files containing the unsloth 🦥 emoji (cp1252). Use `tools/save_kernel_run.py` or `tools/_fetch_log3.py`.
+- `kaggle kernels output` only fetches the LATEST version's session output. For older versions use `kaggle kernels files` or `tools/_fetch_kernel_version.py`.
+- Kaggle Models API upload needs `licenseName`; Dataset path doesn't.
+
+## Open mysteries (no impact on workflow yet)
+
+- `[EarlyStopOnLowLoss]` diagnostic prints never appear in v3/r2 logs despite the class being defined and `callbacks=[...]` wired into `UnslothFixedTrainer`. Training losses (0.019–0.044) sit well below the 0.05 threshold yet step counts hit the full schedule (32–64). Either Unsloth filters callback prints, on_log isn't called by `UnslothFixedTrainer`, or something else. Doesn't block analysis but tuning the threshold blind is unwise until understood.
 
 ## Standing workflow
 
 1. **Edit notebook** via `tools/_build_*_nb.py` (don't hand-edit JSON).
-2. **Local dry-run**: `python tools/dry_run_notebook.py notebooks/<name>.ipynb` — must pass before push.
-3. **Push**: `kaggle kernels push -p notebooks/<name>-push`.
-4. **Run on Kaggle** (web UI Save Version → Save & Run All; auto-runs after push).
-5. **On completion, save run**: `python tools/save_kernel_run.py <owner>/<slug> <Xs> <descriptor>`.
-6. **Score / inspect**: read the report JSON; verify against `data/arc-prize-2026-arc-agi-2/arc-agi_evaluation_solutions.json`. Optionally `tools/analyze_discarded_answers.py <results_dir>` for selection-algo diagnostics.
+2. **Local dry-run**: `python tools/dry_run_notebook.py notebooks/<name>.ipynb`.
+3. **Sync push folder**: `cp notebooks/<name>.ipynb notebooks/<name>-push/<name>.ipynb`.
+4. **Push**: `kaggle kernels push -p notebooks/<name>-push`.
+5. **Manual attach in Kaggle web UI**: competition + datasets + model + unsloth-patch kernel (one-time per slug).
+6. **Run on Kaggle** (Save Version → Save & Run All).
+7. **On completion**: `tools/save_kernel_run.py`, then `analyze_discarded_answers.py` (always, per memory), then `similarity_analysis.py`.
 
 ## Session pickup checklist
 
-For a fresh context, run in order:
 1. Read this `STATE.md` and `PLAN.md`.
-2. `kaggle kernels status lucyellu/subprobs-vanilla120-r2` and `lucyellu/subprobs-separated172-r2`. If COMPLETE, run the pickup commands above.
-3. Score results, run sanity checks listed above.
-4. Update `STATE.md`'s "Verified findings" with the new datapoints (date them).
-5. If chunk 0 results look promising, walk chunks 1..12 per `PLAN.md` P3.
-6. Memory entries (auto-loaded via `MEMORY.md` index) cover Kaggle gotchas — don't relearn them.
+2. `kaggle kernels status lucyellu/subprobs-vanilla120-r2` and `subprobs-separated172-r2`.
+3. If runs complete: package, score, run analyzers, append to "Verified findings".
+4. Memory entries (auto-loaded via `MEMORY.md`) cover Kaggle gotchas — don't relearn them.

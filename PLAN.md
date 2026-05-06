@@ -4,95 +4,102 @@ Open questions and next experiments. Sister doc: `STATE.md` (current status, art
 
 ## Open questions
 
-1. **Does isolation help on multi-test puzzles vanilla actually fails?** Need full grouped + separated data on the 49 multi-test originals. Diff: any subtest where vanilla fails AND separated solves is real signal.
+1. **Does isolation recover any subtest vanilla misses?** Across chunks 0+1+2 (25 separated subtests, 17 vanilla subtests since vanilla chunk 2 just finished too): zero "vanilla miss → separated solve" datapoints. One regression (`20270e3b_1` vanilla solved, separated missed). Tentative read: **isolation does not increase coverage**. Will revisit after walking remaining chunks 3–12.
 
-2. **Two-cell contingency to fill in across 101 multi-test subtests:**
-   - vanilla solved + isolation solved → no signal (both fine)
-   - vanilla solved + isolation missed → isolation *hurts* on this one (regression)
-   - vanilla missed + isolation solved → **the result we're hunting**
-   - vanilla missed + isolation missed → capability-bound, isolation doesn't fix it
+2. **Is the selection algorithm sometimes the bottleneck?** Yes — confirmed on `1ae2feb7_1` (chunk 1 vanilla) where the right answer was at rank 7. Chunks 0 and 2 had 0/16 discarded, so the rate is puzzle-dependent. Worth a separate experiment: bump `n_guesses=2` to 3 or 5 and see if a few discarded answers get recovered cheaply.
 
-3. **At what isolation rate is the experiment worth pursuing further?** If isolation recovers ~5+ subtests across 101, worth a leaderboard run. <2 is noise, abandon.
+3. **Is separated genuinely *faster* per unit work even if not more accurate?** Chunk 2 datapoint: separated 19 min for 8 subtests vs vanilla 28 min for the same 4 puzzles (same content). Vanilla is bottlenecked by its hardest puzzle's serialized n=2 decode (`221dfab4` ate 22 min); separated parallelizes subtests across workers. Implication: **isolation may have a TIME advantage even without an ACCURACY advantage**. Worth quantifying once chunks 3–12 land.
 
-4. **(User hypothesis 2026-05-06)** Is the inference pipeline implicitly budgeting for 120 puzzles when handed 172? Quick code audit: search for any size-dependent assumption in `scripts/arc_solver.py` and `scripts/arc_loader.py`. Likely null result — TTT step count (`n=8`) and per-puzzle 1200 s decode cap are universal — but cheap to confirm.
+4. **Why don't `[EarlyStopOnLowLoss]` diagnostic prints appear in r1/r2 logs?** The class is in the .ipynb source, `callbacks=[EarlyStopOnLowLoss(...)]` is wired, training losses (0.017–0.162) cross the 0.05 threshold, but the callback's print never reaches the log. Either Unsloth's `UnslothFixedTrainer` filters callbacks, or `on_log` isn't called by the Unsloth-monkeypatched trainer. Tuning the threshold blind is unwise until understood.
 
-5. **Why did `136b0064` finish in 66 s with no non-trivial attempt?** Reproduces in BOTH grouped and separated runs (under OLD chunking). Worker reported "finished" but no decode output. Either decode produced nothing valid (max_score threshold) or DFS branches all died. Worth pulling the bz2 inference output for that subkey. Not in active multi-only chunking, so deprioritized.
-
-6. **Does loss-thresholded TTT preserve scores?** Reference notebook implies yes (29.72 LB). Now wired in via `tools/_solver_patches.apply_early_stop`. First chunk 0 results will tell us if early-stop fires AND if scores look reasonable vs the OLD design without early-stop.
+5. **What `puzzle_timeout` and `RUN_HOURS` would survive the 12-hour Kaggle competition rerun?** Current r2 caps (`puzzle_timeout=2400s`, `RUN_HOURS=3.0/4.0`) work for 4-puzzle dev chunks but **don't scale to 240 test puzzles in rerun**. Worst case: 240 × 40 min / 4 workers = 40 hours, 3.3× over. Realistic budget for rerun: ~12 min average per puzzle (`puzzle_timeout` ~720s).
 
 ## Next experiments (priority order)
 
-### P1 — DONE (2026-05-06) — old-design chunks 0+1 ✓
+### P1 — DONE — old-chunked design (chunks 0+1, pre-r1) ✓
 
-OLD chunking design (4 separated keys/chunk; multi-test originals duplicated across vanilla chunks). Results in `results/archive/results_vanilla-chunked-*` (gitignored). Findings recorded in `STATE.md`.
+Forensics in `results/archive/results_vanilla-chunked-*` (gitignored). 1/5 then 0/5; multi-test subtest skips from 1200s cap; selection algo not the bottleneck on those puzzles.
 
-### P1.5 — DONE (2026-05-06) — Refactor: chunk-on-originals + multi-only + random IDs ✓
+### P1.5 — DONE — r1 design refactor: chunk-on-originals + multi-only + random IDs ✓
 
-- **Chunk on ORIGINAL puzzles** (4 per chunk) — vanilla and separated kernels share the same chunk → originals mapping. No more redundant grouped runs.
-- **Multi-only filter:** 49 multi-test originals → 13 chunks of 4. Single-test puzzles excluded (no isolation signal).
-- **Random hex IDs** in the separated dataset (seed=2602). Mimics the 120-eval ID format. Same input/output pairs preserved.
-- **EarlyStopOnLowLoss callback** (threshold=0.05, patience=2, logging_steps=16). Ported from the 29.72-LB reference notebook into `tools/_solver_patches.apply_early_stop`.
-- **Kernel slug versioning:** `r1` was the original chunked design (chunks 0+1). `r2` is the new design with doubled budget, rerun-mode branching, submission renames, and human-id reports — starting at chunk 2. Bump to `rN+1` when making another design overhaul.
+49 multi-test originals → 13 chunks of 4. EarlyStopOnLowLoss callback wired (but see open Q4). 172-puzzle separated dataset (seed=2602) on Kaggle.
 
-### P2 — IN FLIGHT (2026-05-06) — chunk 0 of both kernels
+### P2 — DONE — r1 chunks 0+1 ✓
 
-Both kernels v1 pushed and running. Chunk 0 originals: `13e47133`, `142ca369`, `16de56c4`, `195c6913` (all multi-test n=2).
+- Chunk 0 (4 originals, 8 subtests): vanilla 0/8, separated 0/8 — capability-bound.
+- Chunk 1 (4 originals, 9 subtests including one n=3): vanilla 2/9 (`1ae2feb7_2`, `20270e3b_1`), separated 1/9 (`1ae2feb7_2`).
+- First confirmed selection-algo failure: `1ae2feb7_1` had the right answer at rank 7 in vanilla.
 
-Pickup commands and sanity checks: see `STATE.md` "Pending Kaggle runs" section.
+### P2.5 — DONE — r2 design overhaul ✓
 
-### P3 — Walk chunks 1..12 (after P2 confirms design works)
+- `apply_puzzle_timeout` patch: DFS 540→1080s, per-puzzle 1200→2400s. Eliminates the chunk-1-style budget-starvation skips.
+- `RUN_HOURS` bumped (vanilla 3.0, separated 4.0).
+- Rerun-mode branching (KAGGLE_IS_COMPETITION_RERUN): vanilla queues all 240 test puzzles; separated builds the separated set inline from `arc-agi_test_challenges.json` then runs all keys.
+- Submission renaming + consolidated `submission.json` per kernel run + per-chunk JSON + human-id reports (`1a` … `49b`).
+- New tools: `tools/_problem_index.py`, `tools/similarity_analysis.py` (with EXACT/CLOSE/ECHO/OFF/BLANK flags), `tools/merge_submissions.py`.
 
-12 chunks remaining per kernel. ~30 min each. Bump `CHUNK_INDEX` in cell 0 default per push, OR override on Kaggle's web editor before Run.
+### P3 — IN FLIGHT — chunk 2 of r2 ✓ (just landed)
 
-**Action per chunk:**
-1. Edit cell 0 in build script (or on Kaggle UI): `CHUNK_INDEX = int(os.getenv("AGI2_CHUNK_INDEX", "<N>"))`.
-2. `python tools/dry_run_notebook.py notebooks/<name>.ipynb`.
-3. `kaggle kernels push -p notebooks/<name>-push` (both kernels).
-4. Run All on each.
-5. After completion: `tools/save_kernel_run.py <slug> <Xs> chunk<N>`.
+- Chunk 2 (4 originals 9–12: `221dfab4`/`247ef758`/`269e22fb`/`2d0172a1`, 8 subtests):
+  - Vanilla 2/8 (`2d0172a1` both subtests).
+  - Separated 2/8 (same puzzle, both subtests).
+  - **Tied** on this chunk. 0/8 discarded in either arm.
+  - 8/8 attempted in both arms — `apply_puzzle_timeout` paid off.
+  - Wall: vanilla 28 min, separated 19 min — separated 50% faster (see open Q3).
 
-Total wall clock to finish: 12 chunks × ~30 min × 2 kernels = ~12 h sequential, or ~6 h if both kernels run in parallel.
+### P4 — Walk chunks 3–12 of r2 (10 chunks remaining)
 
-After P3, we have a complete grouped-vs-separated comparison on all 49 multi-test originals (101 subtests).
+Per chunk: bump `CHUNK_INDEX` default in build script, rebuild, sync to push folder, push, manual web-UI attach (one-time per slug), Save Version & Run All, then `tools/save_kernel_run.py` + `tools/analyze_discarded_answers.py` + `tools/similarity_analysis.py`.
 
-### P4 — Quick code audit (open question 4)
+After P4, we have full chunks 0–12 coverage on the 49 multi-test originals (101 subtests). At that point either:
+- Isolation has recovered ≥3 subtests vanilla missed → worth a leaderboard run.
+- Isolation has 0 wins where vanilla missed → abandon coverage hypothesis, pivot to time-advantage hybrid (open Q3).
 
-Grep `scripts/arc_solver.py` and `scripts/arc_loader.py` for any size-dependent constants. Cheap, ~15 min.
+### P5 — Hybrid ensemble for final submission (user 2026-05-06)
 
-### P5 — Fork the unsloth patch kernel
+Hypothesis: vanilla wins on accuracy overall; separated may have a time advantage for hard puzzles (open Q3). For final leaderboard:
+- Run vanilla on all 240 test puzzles with a **tighter** `puzzle_timeout` (~720s) so it covers everything in 12 h.
+- Identify puzzles vanilla skipped or used the full cap on (likely the n≥3 multi-test originals + a few hard n=2 ones).
+- Run separated only on those, with the looser cap (since fewer puzzles = more headroom per).
+- Consolidate via `tools/merge_submissions.py` (vanilla as base, separated overrides where vanilla had a placeholder or worse cell-match score).
 
-One-click "Copy & Edit" of `sorokin/pip-install-unsloth-flash-patch` on Kaggle web UI, save under `lucyellu/`. Update kernel-metadata `kernel_sources`. ~30 s. Insurance against sorokin breaking the patch.
+Don't build until chunks 3–12 give us a confident ranking of which subtests separated beats vanilla on (or proves it never does, in which case skip P5).
 
-### P6 — Mirror the 2B model (optional)
+### P6 — Investigate the EarlyStop diagnostic mystery
 
-`python scripts/mirror_qwen_models.py --only-2b --skip-upload` to download. Then write a `dataset-metadata.json` and `kaggle datasets create -p ...` to upload as a Dataset. Only if you want to test the 2B variant.
+`[EarlyStopOnLowLoss]` prints don't reach the log despite the class being instantiated. Two cheap probes:
+- Add a `__del__` print to confirm the callback object lives through TTT.
+- Replace the `print` calls with `sys.stderr.write` to bypass any captured stdout.
+- Check if Unsloth's monkeypatched trainer skips `TrainerCallback.on_log`.
 
-### P7 (deferred until P3 confirms isolation helps) — submission notebook for hidden test set
+Useful before tuning the threshold or relying on early stopping for the leaderboard rerun budget (open Q5).
 
-Build `separated_submission.ipynb` that:
-- Detects `KAGGLE_IS_COMPETITION_RERUN`.
-- In rerun mode, builds the separated set in-notebook from `arc-agi_test_challenges.json` (240 puzzles → ~340 separated subtests, no solutions needed).
-- Runs all separated, recombines to original-shape `submission.json` keyed by test puzzle ids.
+### P7 — Leaderboard submission build
 
-Don't build until P3 confirms isolation actually helps.
+The r2 notebooks already detect `KAGGLE_IS_COMPETITION_RERUN` and produce a full-shape `submission.json`. Two things still needed:
+- A leaderboard-tuned variant of `puzzle_timeout` / `RUN_HOURS` (open Q5).
+- Manual web-UI attach of competition + datasets + model + unsloth-patch kernel for the leaderboard slug.
 
-### P8 (longer-term) — train our own grids model
+Run only after P4 confirms isolation gives some advantage (accuracy or time).
 
-**Goal:** own the model, not depend on sorokin. Probably qwen3-4b base + grid-format SFT on ARC train set + augmentation.
+### P8 — Selection-algorithm tweak (open Q2)
 
-**Open subquestions:** dataset format (we have `scripts/arc_loader.py` formatting), training infra (Kaggle TPU? Lambda Labs? local 4090?), checkpoint sharing path.
+Bump `n_guesses` from 2 to 3 or 5 in `ArcDecoder` and re-score chunk 1 vanilla retroactively (the `1ae2feb7_1` rank-7 case). If we'd recover that subtest at n=3, run a chunk subset with the wider selection. Cheap one-day experiment.
+
+### P9 (longer-term) — train our own grids model
+
+Goal: own the model, not depend on sorokin. Probably qwen3-4b base + grid-format SFT on ARC train set + augmentation. Open subquestions: training infra (Kaggle TPU? Lambda? local 4090?), checkpoint sharing path, dataset format.
 
 ## Decisions made
 
-- **Mirror as Kaggle Dataset, not Model.** Model API upload kept hitting `licenseName` validation; Dataset path worked first try.
-- **Chunk size 4 ORIGINALS** (not separated keys) for both kernels. Each chunk runs 4-12 separated subtests depending on multi-test composition.
-- **Multi-only chunking.** 49 multi-test originals = 13 chunks; single-test puzzles excluded.
-- **Random hex IDs** in the separated dataset (seed=2602). Mimics the 120-eval ID format. Same input/output pairs preserved.
-- **`vanilla120-r1` is self-contained** — chunk → originals mapping baked in at build time, no separated-dataset attachment needed.
-- **Mirror is preferred over sorokin's mount** — set explicitly via `AGI2_MODEL_PATH` in the run cell.
-- **EarlyStopOnLowLoss is in the build pipeline** (threshold=0.05, patience=2, logging_steps=16).
+- **r1 was the original chunked design (chunks 0+1); r2 doubles budgets, adds rerun mode, renames outputs, adds human IDs.** Bump to `rN+1` only for substantial design overhauls, not chunk progression.
+- **Mirror as Kaggle Dataset, not Model.** Model API upload kept hitting `licenseName` validation; Dataset path worked first try. Always **manually web-UI attach** to new kernel slugs.
+- **Chunk size 4 ORIGINALS** (not separated keys). Multi-only chunking (49 originals = 13 chunks).
+- **Random hex IDs in the separated dataset (seed=2602).** Qwen never sees the puzzle ID (formatter only handles grids), so the hex format is a Kaggle-distribution-matching choice. For analysis output we translate to human IDs (`1a`/`12b`) via `_problem_index.py`.
+- **Submissions named explicitly:** `submission_vanilla120_chunk{N}.json`, `submission_sep172_chunk{N}.json` (human-keyed), `submission.json` (full 120-shape with placeholders, mergeable).
+- **Result folder format:** `results_subprobs-<descriptor>-<rest>-<duration>` so chunks group when sorted.
+- **EarlyStopOnLowLoss is in the build pipeline** (threshold=0.05, patience=2, logging_steps=16) — but its diagnostic prints don't appear in logs. Open Q4.
 - **Don't mirror competition data.** Comes from `competition_sources`, durable for active competition.
-- **Naming convention for new experiment kernels:** `subprobs_<basetype><N>_r<runidx>`. Lets us run multiple experimental variants without slug collisions.
 
 ## Notes on the broader landscape
 
