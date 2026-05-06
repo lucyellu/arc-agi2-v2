@@ -11,7 +11,7 @@ Usage:
 
 Example:
     python tools/merge_submissions.py \
-        results/results_subprobs-vanilla120-r1-*-chunk*/submission.json \
+        results/results_subprobs-vanilla120-*/submission.json \
         -o results/submissions/latest/submission_vanilla120_merged.json
 """
 import argparse

@@ -16,18 +16,18 @@ Both running on v1 of new slugs. Same chunk 0 content (4 multi-test originals: `
 
 | Kernel | What it tests | Expected wall clock |
 |---|---|---|
-| `lucyellu/subprobs-vanilla120-r1` | Vanilla grouped baseline on those 4 multi originals | ~16–22 min |
-| `lucyellu/subprobs-separated172-r1` | Separated isolation on those 4 originals' 8 subtests | ~25–35 min |
+| `lucyellu/subprobs-vanilla120-r2` | Vanilla grouped baseline on those 4 multi originals | ~16–22 min |
+| `lucyellu/subprobs-separated172-r2` | Separated isolation on those 4 originals' 8 subtests | ~25–35 min |
 
 ### Pickup commands when they complete
 
 ```powershell
-PYTHONIOENCODING=utf-8 kaggle kernels status lucyellu/subprobs-vanilla120-r1
-PYTHONIOENCODING=utf-8 kaggle kernels status lucyellu/subprobs-separated172-r1
+PYTHONIOENCODING=utf-8 kaggle kernels status lucyellu/subprobs-vanilla120-r2
+PYTHONIOENCODING=utf-8 kaggle kernels status lucyellu/subprobs-separated172-r2
 
 # Package each completed run:
-python tools/save_kernel_run.py lucyellu/subprobs-vanilla120-r1 <Xs> chunk0
-python tools/save_kernel_run.py lucyellu/subprobs-separated172-r1 <Xs> chunk0
+python tools/save_kernel_run.py lucyellu/subprobs-vanilla120-r2 <Xs> chunk0
+python tools/save_kernel_run.py lucyellu/subprobs-separated172-r2 <Xs> chunk0
 ```
 
 ### Sanity checks to run after results land
@@ -47,11 +47,13 @@ python tools/save_kernel_run.py lucyellu/subprobs-separated172-r1 <Xs> chunk0
 
 | slug | purpose | status |
 |---|---|---|
-| `subprobs-vanilla120-r1` | Vanilla NVARC (grouped) on 120-eval, multi-only (49 originals, 13 chunks of 4). EarlyStopOnLowLoss TTT, chunk-on-originals, mirror model. | v1 RUNNING chunk 0 |
-| `subprobs-separated172-r1` | Vanilla NVARC on separated 172, multi-only (101 separated subtests of 49 multi originals, 13 chunks). | v1 RUNNING chunk 0 |
+| `subprobs-vanilla120-r2` | Vanilla NVARC (grouped) on 120-eval, NEW design: doubled budget (puzzle 2400s, DFS 1080s), RUN_HOURS 3.0, rerun-mode branching, submission_vanilla120_chunk{N}.json + submission.json outputs, human-id reports. | active |
+| `subprobs-separated172-r2` | Same NEW design for separated. RUN_HOURS 4.0, rerun-mode builds separated set inline from arc-agi_test_challenges.json, submission_sep172_chunk{N}.json (human-keyed) + submission.json. | active |
+| `subprobs-vanilla120-r1` | OLD design (1.5h, 1200s puzzle cap). Last version v3 = chunk 1, 2/9 correct. Historical. | superseded |
+| `subprobs-separated172-r1` | OLD design (2.0h, 1200s puzzle cap, mirror dataset never auto-attached). v3 = chunk 1, 1/9 correct. Historical. | superseded |
 | `kaggle-v1-n8-r64-a16-nvarc-32-64-base` | Working 26.94 LB reference. Don't modify. | reference |
-| `vanilla-chunked` | OLD slug, superseded by `subprobs-vanilla120-r1`. Old chunk 0+1 results still attached. Safe to delete via web UI. | orphaned |
-| `separated172-all` | OLD slug, superseded by `subprobs-separated172-r1`. Old chunk 0 results still attached. Safe to delete. | orphaned |
+| `vanilla-chunked` | OLDEST slug, superseded by r1 then r2. Orphaned. | orphaned |
+| `separated172-all` | OLDEST slug, superseded by r1 then r2. Orphaned. | orphaned |
 
 ### Kaggle datasets (lucyellu/)
 
@@ -60,8 +62,8 @@ python tools/save_kernel_run.py lucyellu/subprobs-separated172-r1 <Xs> chunk0
 
 ### Local notebooks (active in `notebooks/`)
 
-- `notebooks/subprobs-separated172-r1.ipynb` — chunked separated runner. Push folder: `notebooks/subprobs-separated172-r1-push/`. Kaggle slug: `lucyellu/subprobs-separated172-r1`.
-- `notebooks/subprobs-vanilla120-r1.ipynb` — chunked vanilla baseline. Push folder: `notebooks/subprobs-vanilla120-r1-push/`. Kaggle slug: `lucyellu/subprobs-vanilla120-r1`.
+- `notebooks/subprobs-separated172-r2.ipynb` — chunked separated runner. Push folder: `notebooks/subprobs-separated172-r2-push/`. Kaggle slug: `lucyellu/subprobs-separated172-r2`.
+- `notebooks/subprobs-vanilla120-r2.ipynb` — chunked vanilla baseline. Push folder: `notebooks/subprobs-vanilla120-r2-push/`. Kaggle slug: `lucyellu/subprobs-vanilla120-r2`.
 - `notebooks/kaggle-v1-n8-r64-a16-nvarc-32-64-base.ipynb` — 26.94 LB working base. **Build dependency** — `_build_*_nb.py` reads `arc_loader.py` / `arc_decoder.py` / `arc_solver.py` cells from this. Don't move.
 
 Everything else is in `notebooks/archive/` (gitignored) — see `notebooks/archive/README.md`.
@@ -70,7 +72,7 @@ Everything else is in `notebooks/archive/` (gitignored) — see `notebooks/archi
 
 - `tools/_solver_patches.py` — shared arc_solver patches: `apply_path_override`, `apply_model_resolver`, `apply_early_stop`. Both build scripts import from here.
 - `tools/_chunking.py` — shared `compute_chunk_mappings(chunk_size=4, multi_only=True)`. Both build scripts use it.
-- `tools/_build_subprobs_separated172_r1_nb.py` and `tools/_build_subprobs_vanilla120_r1_nb.py` — produce the active notebooks. **Always edit these, never hand-edit the .ipynb JSON.** After rebuilding, also `cp` the active `.ipynb` into the matching `-push/` folder so `kaggle kernels push` ships the latest content.
+- `tools/_build_subprobs_separated172_r2_nb.py` and `tools/_build_subprobs_vanilla120_r2_nb.py` — produce the active notebooks. **Always edit these, never hand-edit the .ipynb JSON.** After rebuilding, also `cp` the active `.ipynb` into the matching `-push/` folder so `kaggle kernels push` ships the latest content.
 - `tools/dry_run_notebook.py` — local exec of any active notebook with subprocess + GPU phases stubbed; ~5 s. **Run before every push.**
 - `tools/save_kernel_run.py <owner>/<slug> <duration> <descriptor>` — packages a finished Kaggle run into `results/results_<slug>-<duration>-<descriptor>/`. Handles cp1252 emoji bug, pulls notebook source + log + outputs.
 - `tools/_fetch_log3.py` — UTF-8 workaround for the Kaggle CLI cp1252 bug on the unsloth 🦥 emoji.
@@ -135,7 +137,7 @@ Everything else is in `notebooks/archive/` (gitignored) — see `notebooks/archi
 
 For a fresh context, run in order:
 1. Read this `STATE.md` and `PLAN.md`.
-2. `kaggle kernels status lucyellu/subprobs-vanilla120-r1` and `lucyellu/subprobs-separated172-r1`. If COMPLETE, run the pickup commands above.
+2. `kaggle kernels status lucyellu/subprobs-vanilla120-r2` and `lucyellu/subprobs-separated172-r2`. If COMPLETE, run the pickup commands above.
 3. Score results, run sanity checks listed above.
 4. Update `STATE.md`'s "Verified findings" with the new datapoints (date them).
 5. If chunk 0 results look promising, walk chunks 1..12 per `PLAN.md` P3.

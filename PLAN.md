@@ -32,7 +32,7 @@ OLD chunking design (4 separated keys/chunk; multi-test originals duplicated acr
 - **Multi-only filter:** 49 multi-test originals → 13 chunks of 4. Single-test puzzles excluded (no isolation signal).
 - **Random hex IDs** in the separated dataset (seed=2602). Mimics the 120-eval ID format. Same input/output pairs preserved.
 - **EarlyStopOnLowLoss callback** (threshold=0.05, patience=2, logging_steps=16). Ported from the 29.72-LB reference notebook into `tools/_solver_patches.apply_early_stop`.
-- **New kernel slugs:** `subprobs-vanilla120-r1` and `subprobs-separated172-r1`. Old slugs orphaned.
+- **Kernel slug versioning:** `r1` was the original chunked design (chunks 0+1). `r2` is the new design with doubled budget, rerun-mode branching, submission renames, and human-id reports — starting at chunk 2. Bump to `rN+1` when making another design overhaul.
 
 ### P2 — IN FLIGHT (2026-05-06) — chunk 0 of both kernels
 
