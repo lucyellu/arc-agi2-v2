@@ -10,7 +10,13 @@ Live status. Update when something completes or changes status. Sister doc: `PLA
 
 **Why it might not:** if vanilla failures on multi-test puzzles are capability-bound rather than budget-bound, isolation gains nothing.
 
-**Status as of chunks 0+1+2:** Vanilla is **ahead** (vanilla 2/17 across chunks 0+1, separated 3/25 across chunks 0+1+2 with vanilla chunk 2 still running). No "vanilla miss → separated solve" datapoints yet. Tentative read: capability-bound on most chunk 0 puzzles, then chunks 1+2 surfaced wins both arms split fairly. See "Verified findings" below.
+**Status as of chunks 0+1+2:** Two-axis comparison, not a single "winner":
+
+- **Accuracy:** vanilla 4/25 (16%), separated 3/25 (12%). Single-subtest difference comes entirely from `20270e3b_1` (chunk 1), which vanilla solved on attempt_2 and separated missed. Every other solved subtest is a tie. **No "vanilla miss → separated solve" datapoints yet.**
+- **Wall time:** separated has been faster on every paired chunk. Chunk 2 the clearest case: vanilla 28 min vs separated 19 min on identical content (50% longer for vanilla). Vanilla bottlenecked by its hardest puzzle's serialized n=2 decode; separated parallelizes subtests across workers.
+- **Net read:** vanilla has a marginal accuracy lead; separated has a consistent time advantage. For chunked dev runs the time difference doesn't matter much; for the 12-hour leaderboard rerun it might be decisive (see PLAN.md P7).
+
+See "Verified findings" below for per-chunk detail.
 
 ## In flight
 

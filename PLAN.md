@@ -57,7 +57,7 @@ After P4, we have full chunks 0–12 coverage on the 49 multi-test originals (10
 
 ### P5 — Hybrid ensemble for final submission (user 2026-05-06)
 
-Hypothesis: vanilla wins on accuracy overall; separated may have a time advantage for hard puzzles (open Q3). For final leaderboard:
+Hypothesis: vanilla has a marginal (+1 subtest of 25) accuracy lead from a single chunk-1 win that may not generalize; separated has a consistent ~50% wall-time advantage from worker-level parallelism. For the 12-hour leaderboard rerun, time savings translate directly to extra puzzle coverage. For final leaderboard:
 - Run vanilla on all 240 test puzzles with a **tighter** `puzzle_timeout` (~720s) so it covers everything in 12 h.
 - Identify puzzles vanilla skipped or used the full cap on (likely the n≥3 multi-test originals + a few hard n=2 ones).
 - Run separated only on those, with the looser cap (since fewer puzzles = more headroom per).
