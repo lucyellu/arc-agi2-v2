@@ -13,14 +13,31 @@ Live status. Update when something completes or changes status. Sister doc: `PLA
 **Status as of chunks 0+1+2:** Two-axis comparison, not a single "winner":
 
 - **Accuracy:** vanilla 4/25 (16%), separated 3/25 (12%). Single-subtest difference comes entirely from `20270e3b_1` (chunk 1), which vanilla solved on attempt_2 and separated missed. Every other solved subtest is a tie. **No "vanilla miss → separated solve" datapoints yet.**
-- **Wall time:** separated has been faster on every paired chunk. Chunk 2 the clearest case: vanilla 28 min vs separated 19 min on identical content (50% longer for vanilla). Vanilla bottlenecked by its hardest puzzle's serialized n=2 decode; separated parallelizes subtests across workers.
-- **Net read:** vanilla has a marginal accuracy lead; separated has a consistent time advantage. For chunked dev runs the time difference doesn't matter much; for the 12-hour leaderboard rerun it might be decisive (see PLAN.md P7).
+- **Wall time at small N (4 puzzles, 4 workers):** separated 19 min vs vanilla 28 min — separated wins because vanilla idles 3 of 4 workers while one chews `221dfab4` for 22 min. Chunk-2 ratio 0.68.
+- **Wall time at large N (240 puzzles, 4 workers, leaderboard scale):** the 0.68 chunk-2 ratio does NOT extrapolate. With 60–85 work units per worker, randomness averages out and no worker idles. Total work then dominates wall:
+  - Vanilla 240 puzzles, ~6 min/puzzle mixed avg → ~9h max-worker.
+  - Separated ~340 subtests, ~7 min/subtest avg → ~10h max-worker.
+  - **Both fit in 12h; vanilla likely slightly faster at leaderboard scale.** Separated's parallelism gain only matters when there's idle worker capacity to absorb — at chunk-2 scale that was abundant; at 240-puzzle scale it's minimal.
+- **Net read:** vanilla has a marginal accuracy lead; separated's time advantage exists at small N but doesn't survive scaling. For the 12-hour leaderboard rerun, vanilla is likely the right baseline. The hybrid (PLAN.md P5) only justifies itself if separated turns out to RECOVER subtests vanilla misses on chunks 3–12 — we have zero such datapoints so far.
 
 See "Verified findings" below for per-chunk detail.
 
 ## In flight
 
 Nothing — chunks 0+1+2 packaged. Next push is chunk 3 (problems 13–16: `36a08778`, `38007db0`, `3a25b0d8`, `3e6067c3`).
+
+## Leaderboard environment (confirmed via arcprize.org 2026-05-06)
+
+This is the SAME hardware our `subprobs-*-r2` kernels run on. Don't assume otherwise — both dev "Save Version" runs and competition rerun use:
+
+- **4× NVIDIA L4 GPUs** (`machine_shape: NvidiaL4x4`). Our `mp.spawn(..., nprocs=4)` matches.
+- **12-hour wall-clock cap** per submission.
+- **240 hidden tasks** = 120 semi-private + 120 private evaluation set. Different from our local 120-eval. Run via `KAGGLE_IS_COMPETITION_RERUN=true` with `arc-agi_test_challenges.json`.
+- **No internet access** during rerun.
+
+The r2 notebooks already detect rerun mode and produce a 240-shape `submission.json`. The only blocker for leaderboard submission is `RUN_HOURS=3.0/4.0` defaults — those were sized for chunked dev runs (4 puzzles), not 240 puzzles. Bump to ~10h for rerun (env override or build-time conditional).
+
+Source: https://arcprize.org/competitions/2026/arc-agi-2.
 
 ## Verified findings (with dates)
 
