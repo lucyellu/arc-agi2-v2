@@ -24,7 +24,7 @@ Open questions and next experiments. Sister doc: `STATE.md` (current status, art
 
 ### P1 — DONE (2026-05-06) — old-design chunks 0+1 ✓
 
-OLD chunking design (4 separated keys/chunk; multi-test originals duplicated across vanilla chunks). Results in `results/results_vanilla-chunked-*`. Findings recorded in `STATE.md`.
+OLD chunking design (4 separated keys/chunk; multi-test originals duplicated across vanilla chunks). Results in `results/archive/results_vanilla-chunked-*` (gitignored). Findings recorded in `STATE.md`.
 
 ### P1.5 — DONE (2026-05-06) — Refactor: chunk-on-originals + multi-only + random IDs ✓
 

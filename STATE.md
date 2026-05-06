@@ -34,7 +34,7 @@ python tools/save_kernel_run.py lucyellu/subprobs-separated172-r2 <Xs> chunk0
 
 1. **Mirror model loaded:** log should print `Using mirror model: /kaggle/input/datasets/lucyellu/qwen3-4b-grids15-sft139-mirror` AND worker subprocesses should print `[model] using AGI2_MODEL_PATH override: ...`.
 2. **EarlyStopOnLowLoss firing:** if any puzzle is "easy", expect `[Early stop] step N loss=...` lines in the worker output.
-3. **Vanilla determinism cross-check:** vanilla chunk 0 should produce the same `13e47133`, `142ca369` results as the OLD `vanilla-chunked` chunk 0/1 runs (saved in `results/results_vanilla-chunked-chunk0-all-1415.9s/` and `results/results_vanilla-chunked-chunk1-mirror-1297.97s/`). Differences would indicate the new chunking or early-stop changed inference outcome — worth investigating.
+3. **Vanilla determinism cross-check:** vanilla chunk 0 should produce the same `13e47133`, `142ca369` results as the OLD `vanilla-chunked` chunk 0/1 runs (now in `results/archive/`). Differences would indicate the new chunking or early-stop changed inference outcome — worth investigating.
 4. **Pairing analysis (the actual experiment):** for each of the 8 multi-test subtests in chunk 0, compare vanilla grouped result vs separated result. Look for:
    - Both wrong → capability-bound
    - Vanilla wrong, separated correct → **isolation helped** (the result we're hunting)
@@ -89,8 +89,8 @@ Everything else is in `notebooks/archive/` (gitignored) — see `notebooks/archi
 
 ### Saved run results
 
-- `results/results_vanilla-chunked-chunk0-all-1415.9s/` — vanilla chunk 0 (sorokin), 1/5 correct. **OLD chunking design.** Originals: `0934a4d8`, `135a2760`, `136b0064`, `13e47133`. Under new multi-only design, only `13e47133` is multi (the other 3 are excluded). Discarded-answer analysis included.
-- `results/results_vanilla-chunked-chunk1-mirror-1297.97s/` — vanilla chunk 1 (mirror), 0/5 correct. **OLD chunking design.** Originals: `13e47133` (redundant), `142ca369`, `16b78196`. Under new design, `13e47133` and `142ca369` are multi-only (chunk 0 of new design). Discarded-answer analysis included.
+- `results/archive/results_vanilla-chunked-chunk0-all-1415.9s/` — vanilla chunk 0 (sorokin), 1/5 correct. **OLD chunking design.** Originals: `0934a4d8`, `135a2760`, `136b0064`, `13e47133`. Under new multi-only design, only `13e47133` is multi (the other 3 are excluded). Discarded-answer analysis included.
+- `results/archive/results_vanilla-chunked-chunk1-mirror-1297.97s/` — vanilla chunk 1 (mirror), 0/5 correct. **OLD chunking design.** Originals: `13e47133` (redundant), `142ca369`, `16b78196`. Under new design, `13e47133` and `142ca369` are multi-only (chunk 0 of new design). Discarded-answer analysis included.
 - Both folders have `vanilla-chunked.log`, the notebook source, full `grouped_outputs/` bz2 dumps, and a `discarded_answers_analysis.{json,md}`.
 
 ## Verified findings (with dates)
