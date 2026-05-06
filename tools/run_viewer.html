@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ARC Viewer</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{margin:0;background:#171717;}
+    .custom-scrollbar::-webkit-scrollbar{width:6px;height:6px}
+    .custom-scrollbar::-webkit-scrollbar-track{background:transparent}
+    .custom-scrollbar::-webkit-scrollbar-thumb{background:#333;border-radius:10px}
+    select option{background:#1a1a1a}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+// ── Inline SVG Icons (replaces lucide-react) ──────────────────────────────────
+const sv = (d, cls) => <svg className={`w-4 h-4 ${cls||''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{d}</svg>;
+const UploadIcon    = ({className}) => sv(<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></>, className);
+const FolderIcon    = ({className}) => sv(<><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></>, className);
+const ImageIcon     = ({className}) => sv(<><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>, className);
+const ArchiveIcon   = ({className}) => sv(<><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></>, className);
+const AlertIcon     = ({className}) => sv(<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>, className);
+const CheckIcon     = ({className}) => sv(<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>, className);
+const ChevRightIcon = ({className}) => sv(<polyline points="9 18 15 12 9 6"/>, className);
+const PlayIcon      = ({className}) => sv(<polygon points="5 3 19 12 5 21 5 3"/>, className);
+const FilterIcon    = ({className}) => sv(<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>, className);
+const WarnIcon      = ({className}) => sv(<><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>, className);
+const XCircleIcon   = ({className}) => sv(<><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></>, className);
+const LayersIcon    = ({className}) => sv(<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>, className);
+const BarChartIcon  = ({className}) => sv(<><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>, className);
+const MenuIcon      = ({className}) => sv(<><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></>, className);
+const ChevDownIcon  = ({className}) => sv(<polyline points="6 9 12 15 18 9"/>, className);
+const ChevUpIcon    = ({className}) => sv(<polyline points="18 15 12 9 6 15"/>, className);
+const ToggleOffIcon = ({className}) => sv(<><rect x="1" y="5" width="22" height="14" rx="7"/><circle cx="8" cy="12" r="3"/></>, className);
+const ToggleOnIcon  = ({className}) => sv(<><rect x="1" y="5" width="22" height="14" rx="7"/><circle cx="16" cy="12" r="3"/></>, className);
+
+// ── ARC color palette ─────────────────────────────────────────────────────────
+const ARC_COLORS = [
+  "#000000","#0074D9","#FF4136","#2ECC40","#FFDC00",
+  "#AAAAAA","#F012BE","#FF851B","#7FDBFF","#870C25",
+];
+
+// ── Helpers (preserved exactly from original viewer) ──────────────────────────
+const isDummyGrid = (g) => {
+  if (!g || !Array.isArray(g) || !Array.isArray(g[0])) return true;
+  if (g.length===1 && g[0].length===1 && g[0][0]===0) return true;
+  return false;
+};
+const hasRealAttempt = (taskSubs) => {
+  if (!taskSubs) return false;
+  return taskSubs.some(s => (s.attempt_1 && !isDummyGrid(s.attempt_1)) || (s.attempt_2 && !isDummyGrid(s.attempt_2)));
+};
+const gridsMatch = (g1, g2) => {
+  if (!g1||!g2||!Array.isArray(g1)||!Array.isArray(g2)) return false;
+  if (g1.length!==g2.length||g1[0].length!==g2[0].length) return false;
+  for (let r=0;r<g1.length;r++) for (let c=0;c<g1[0].length;c++) if (g1[r][c]!==g2[r][c]) return false;
+  return true;
+};
+const getColorCounts = (grid) => {
+  const counts = Array(10).fill(0);
+  if (!grid||!Array.isArray(grid)) return counts;
+  for (let r=0;r<grid.length;r++) { if (!Array.isArray(grid[r])) continue; for (let c=0;c<grid[r].length;c++) { const v=grid[r][c]; if(v>=0&&v<=9) counts[v]++; } }
+  return counts;
+};
+const getPalette = (...grids) => {
+  const u = new Set();
+  grids.forEach(g => { if (!g||!Array.isArray(g)) return; for (let r=0;r<g.length;r++) { if (!Array.isArray(g[r])) continue; for (let c=0;c<g[r].length;c++) if (g[r][c]>=0&&g[r][c]<=9) u.add(g[r][c]); } });
+  return Array.from(u).sort((a,b)=>a-b);
+};
+const getExpectedOutput = (challenges, solutions, taskId, idx) => {
+  if (challenges[taskId]?.test?.[idx]?.output) return challenges[taskId].test[idx].output;
+  if (solutions[taskId]) {
+    if (Array.isArray(solutions[taskId])) {
+      const item = solutions[taskId][idx];
+      if (!item) return null;
+      if (Array.isArray(item)&&(item.length===0||Array.isArray(item[0]))) return item;
+      if (item.output) return item.output;
+    }
+    if (solutions[taskId].test?.[idx]?.output) return solutions[taskId].test[idx].output;
+  }
+  return null;
+};
+const getPairCount = (challenges, solutions, sub1, sub2, taskId) => {
+  let n = challenges[taskId]?.test?.length || 0;
+  if (!n && sub1) n = Math.max(n, sub1.length);
+  if (!n && sub2) n = Math.max(n, sub2.length);
+  if (!n && solutions[taskId]) { if (Array.isArray(solutions[taskId])) n=Math.max(n,solutions[taskId].length); else if (solutions[taskId].test) n=Math.max(n,solutions[taskId].test.length); }
+  return n;
+};
+const computeTrainAverages = (taskObj) => {
+  if (!taskObj?.train?.length) return null;
+  let s={areaDiff:0,areaPct:0,changed:0,changedPct:0,unchanged:0,unchangedPct:0,colorsChanged:0,colorsChangedPct:0,colorsUnchanged:0,colorsUnchangedPct:0}, vp=0;
+  taskObj.train.forEach(pair => {
+    const g=pair.output,rg=pair.input;
+    if(!g||!rg||!Array.isArray(g)||!Array.isArray(rg)) return;
+    vp++;
+    const rows=g.length,cols=g[0].length,rr=rg.length,rc=rg[0].length;
+    const ta=rows*cols,rta=rr*rc,ad=ta-rta,ap=rta>0?(ad/rta)*100:0;
+    let unc=0; const mr=Math.min(rows,rr),mc=Math.min(cols,rc);
+    for(let r=0;r<mr;r++) for(let c=0;c<mc;c++) if(g[r][c]===rg[r][c]) unc++;
+    const ch=ta-unc,chp=ta>0?(ch/ta)*100:0,uncp=ta>0?(unc/ta)*100:0;
+    const cnt=getColorCounts(g),rcnt=getColorCounts(rg),pal=getPalette(g,rg);
+    let cc=0,cu=0; pal.forEach(c=>{if(cnt[c]===rcnt[c])cu++;else cc++;});
+    s.areaDiff+=ad;s.areaPct+=ap;s.changed+=ch;s.changedPct+=chp;s.unchanged+=unc;s.unchangedPct+=uncp;
+    s.colorsChanged+=cc;s.colorsChangedPct+=pal.length>0?(cc/pal.length)*100:0;s.colorsUnchanged+=cu;s.colorsUnchangedPct+=pal.length>0?(cu/pal.length)*100:0;
+  });
+  if (!vp) return null;
+  return Object.fromEntries(Object.entries(s).map(([k,v])=>[k,v/vp]));
+};
+
+// ── File type auto-detection ──────────────────────────────────────────────────
+function detectFileType(filename, data) {
+  const n = filename.toLowerCase();
+  if (n.includes('submission_detailed') || /detailed_\d/.test(n)) return 'detailed';
+  if (n.includes('challenge')) return 'challenges';
+  if (n.includes('solution') && !n.includes('sub')) return 'solutions';
+  if (n.includes('submission')) return 'submission';
+  // content-based fallback
+  const keys = Object.keys(data||{});
+  if (!keys.length) return null;
+  const fv = data[keys[0]];
+  if (!fv||typeof fv!=='object') return null;
+  if (fv.train && Array.isArray(fv.train)) return 'challenges';
+  if (Array.isArray(fv) && fv[0]?.attempt_1 !== undefined) return 'submission';
+  if (fv.puzzle_id || fv.revision_rounds != null) return 'detailed';
+  if (Array.isArray(fv) && Array.isArray(fv[0])) return 'solutions';
+  return null;
+}
+
+// ── GridBlock (preserved exactly from original viewer) ────────────────────────
+function GridBlock({ title, grid, highlight, evalExpected, overlayExpected, overlayMode, referenceGrid, sharedPalette, trainAverages, showDifferences }) {
+  if (!grid||!Array.isArray(grid)||!Array.isArray(grid[0])) return (
+    <div className="flex flex-col gap-1">
+      <div className="h-[28px] flex items-end pb-1"><span className="text-[10px] uppercase font-bold text-neutral-400">{title}</span></div>
+      <div className="text-red-500 text-[10px] border border-red-900/50 p-2 rounded bg-red-900/10">Invalid</div>
+    </div>
+  );
+  const rows=grid.length, cols=grid[0].length;
+  let gradeBorder='', gradeIcon=null;
+  if (evalExpected) {
+    const ok = gridsMatch(grid, evalExpected);
+    if (ok) { gradeBorder='ring-2 ring-green-500 ring-offset-2 ring-offset-neutral-900'; gradeIcon=<CheckIcon className="w-3 h-3 text-green-500 ml-1 inline shrink-0"/>; }
+    else     { gradeBorder='ring-2 ring-red-500/50 ring-offset-1 ring-offset-neutral-900'; gradeIcon=<XCircleIcon className="w-3 h-3 text-red-500/70 ml-1 inline shrink-0"/>; }
+  }
+  const highlightClasses = highlight ? 'ring-2 ring-green-500 ring-offset-2 ring-offset-neutral-900' : '';
+  const maxDim=Math.max(rows,cols);
+  let cellSize='w-4 h-4 sm:w-5 sm:h-5';
+  if (maxDim>=20) cellSize='w-1.5 h-1.5';
+  else if (maxDim>=15) cellSize='w-2 h-2';
+  else if (maxDim>=10) cellSize='w-3 h-3';
+  const counts=getColorCounts(grid);
+  const refCounts=referenceGrid?getColorCounts(referenceGrid):null;
+  let areaDiff=0,areaPct=0,changed=0,unchanged=0,changedPct=0,unchangedPct=0,colorsChanged=0,colorsUnchanged=0,colorsChangedPct=0,colorsUnchangedPct=0;
+  if (referenceGrid) {
+    const rr=referenceGrid.length,rc=referenceGrid[0].length,ta=rows*cols,rta=rr*rc;
+    areaDiff=ta-rta; areaPct=rta>0?((areaDiff/rta)*100).toFixed(1):0;
+    const mr=Math.min(rows,rr),mc=Math.min(cols,rc);
+    for(let r=0;r<mr;r++) for(let c=0;c<mc;c++) if(grid[r][c]===referenceGrid[r][c]) unchanged++;
+    changed=ta-unchanged; changedPct=ta>0?((changed/ta)*100).toFixed(1):0; unchangedPct=ta>0?((unchanged/ta)*100).toFixed(1):0;
+    if (sharedPalette?.length) {
+      sharedPalette.forEach(c=>{if(counts[c]===refCounts[c])colorsUnchanged++;else colorsChanged++;});
+      colorsChangedPct=((colorsChanged/sharedPalette.length)*100).toFixed(1);
+      colorsUnchangedPct=((colorsUnchanged/sharedPalette.length)*100).toFixed(1);
+    }
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="h-[28px] flex items-end pb-1">
+        <span className="text-[10px] uppercase font-bold text-neutral-400 flex items-center gap-1 flex-wrap leading-tight">
+          {title} <span className="text-[9px] text-neutral-600 bg-neutral-800 px-1 rounded whitespace-nowrap">{cols}x{rows}</span>{gradeIcon}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 grid-rows-1 relative inline-flex self-start justify-self-start">
+        <div className={`col-start-1 row-start-1 bg-neutral-700 p-[1px] flex flex-col gap-[1px] shadow-sm self-start justify-self-start ${highlightClasses} ${gradeBorder} z-10`}>
+          {grid.map((row,ri)=>(<div key={ri} className="flex gap-[1px]">{row.map((val,ci)=>(<div key={ci} className={cellSize} style={{backgroundColor:ARC_COLORS[val]||'#000'}} title={`Color: ${val}`}/>))}</div>))}
+        </div>
+        {referenceGrid && (
+          <div className="col-start-1 row-start-1 p-[1px] flex flex-col gap-[1px] invisible pointer-events-none self-start justify-self-start">
+            {referenceGrid.map((row,ri)=>(<div key={ri} className="flex gap-[1px]">{row.map((_,ci)=>(<div key={ci} className={cellSize}/>))}</div>))}
+          </div>
+        )}
+        {overlayExpected&&Array.isArray(overlayExpected)&&overlayExpected.length>0&&(
+          <div className={`col-start-1 row-start-1 p-[1px] flex flex-col gap-[1px] pointer-events-none z-20 transition-opacity self-start justify-self-start ${overlayMode?'opacity-60':'opacity-0'}`}>
+            {overlayExpected.map((row,ri)=>(<div key={ri} className="flex gap-[1px]">{row.map((val,ci)=>(<div key={ci} className={`${cellSize} shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]`} style={{backgroundColor:ARC_COLORS[val]||'#000'}}/>))}</div>))}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col gap-1.5 mt-2 max-w-full text-xs self-start">
+        {sharedPalette && sharedPalette.map(ci=>{
+          const count=counts[ci],refCount=refCounts?refCounts[ci]:0,diff=count-refCount;
+          let pctStr=''; if(refCounts&&diff!==0) pctStr=refCount===0?'∞%':`${((diff/refCount)*100).toFixed(0)}%`;
+          return (
+            <div key={ci} className="flex items-center gap-2 text-[10px] text-neutral-400 h-4">
+              <div className="w-3 h-3 rounded-none shrink-0" style={{backgroundColor:ARC_COLORS[ci]}}/>
+              {showDifferences&&refCounts ? (
+                <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  <span className="font-mono text-neutral-500 w-5 text-right">{refCount}</span>
+                  <span className="text-neutral-600">→</span>
+                  <span className="font-mono text-neutral-300 w-5">{count}</span>
+                  {diff!==0&&<span className={`font-mono ml-1 ${diff>0?'text-green-400':'text-red-400'}`}>({diff>0?'+':''}{diff}, {diff>0?'+':''}{pctStr})</span>}
+                </div>
+              ) : <span className="font-mono text-neutral-300 w-5">{count}</span>}
+            </div>
+          );
+        })}
+      </div>
+      {(referenceGrid||trainAverages)&&(
+        <div className="mt-1 flex gap-4 border-t border-neutral-700 pt-3 text-[10px] text-neutral-400 overflow-x-auto custom-scrollbar pb-2 max-w-[400px]">
+          {trainAverages&&(
+            <div className="flex flex-col gap-1.5 min-w-[155px] shrink-0 pr-2">
+              <span className="font-bold text-neutral-300 uppercase tracking-wider text-[9px] mb-0.5">Train Average</span>
+              <div className="flex justify-between gap-3"><span>Size Diff:</span><span className={`font-mono ${trainAverages.areaDiff>0?'text-green-400':trainAverages.areaDiff<0?'text-red-400':'text-neutral-500'}`}>{trainAverages.areaDiff>0?'+':''}{trainAverages.areaDiff.toFixed(1)} ({trainAverages.areaDiff>0?'+':''}{trainAverages.areaPct.toFixed(1)}%)</span></div>
+              <div className="flex justify-between gap-3"><span>Sq Changed:</span><span className="font-mono text-blue-400">{trainAverages.changed.toFixed(1)} ({trainAverages.changedPct.toFixed(1)}%)</span></div>
+              <div className="flex justify-between gap-3"><span>Sq Unchg:</span><span className="font-mono text-purple-400">{trainAverages.unchanged.toFixed(1)} ({trainAverages.unchangedPct.toFixed(1)}%)</span></div>
+              <div className="flex justify-between gap-3"><span>Col Changed:</span><span className="font-mono text-yellow-400">{trainAverages.colorsChanged.toFixed(1)} ({trainAverages.colorsChangedPct.toFixed(1)}%)</span></div>
+              <div className="flex justify-between gap-3"><span>Col Unchg:</span><span className="font-mono text-purple-400">{trainAverages.colorsUnchanged.toFixed(1)} ({trainAverages.colorsUnchangedPct.toFixed(1)}%)</span></div>
+            </div>
+          )}
+          {referenceGrid&&(
+            <div className="flex flex-col gap-1.5 min-w-[155px] shrink-0 pr-2">
+              <span className="font-bold text-neutral-300 uppercase tracking-wider text-[9px] mb-0.5">Output Vs Input</span>
+              <div className="flex justify-between gap-3"><span>Size Diff:</span><span className={`font-mono ${areaDiff>0?'text-green-400':areaDiff<0?'text-red-400':'text-neutral-500'}`}>{areaDiff>0?'+':''}{areaDiff} ({areaDiff>0?'+':''}{areaPct}%)</span></div>
+              <div className="flex justify-between gap-3"><span>Sq Changed:</span><span className="font-mono text-blue-400">{changed} ({changedPct}%)</span></div>
+              <div className="flex justify-between gap-3"><span>Sq Unchg:</span><span className="font-mono text-purple-400">{unchanged} ({unchangedPct}%)</span></div>
+              <div className="flex justify-between gap-3"><span>Col Changed:</span><span className="font-mono text-yellow-400">{colorsChanged} ({colorsChangedPct}%)</span></div>
+              <div className="flex justify-between gap-3"><span>Col Unchg:</span><span className="font-mono text-purple-400">{colorsUnchanged} ({colorsUnchangedPct}%)</span></div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── TaskView ──────────────────────────────────────────────────────────────────
+function TaskView({ taskId, challenges, solutions, sub1, sub2, sub1Name, sub2Name, overlayMode, showDifferences, activeTaskTrainAverages, run }) {
+  const task = challenges[taskId];
+  const pairCount = getPairCount(challenges, solutions, sub1, sub2, taskId);
+  const hasLOO = run?.has_loo;
+  return (
+    <div className="space-y-6 pb-2">
+      {task?.train?.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-sm font-bold text-blue-400 uppercase tracking-wider">Train Examples</h3>
+            {hasLOO && <span className="text-[10px] text-amber-500/80 bg-amber-950/30 px-2 py-0.5 rounded border border-amber-800/30">pair 1 held out for LOO</span>}
+            <div className="flex-1 h-px bg-neutral-800 ml-2"/>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {task.train.map((pair, idx) => {
+              const isLOO = idx === 0 && hasLOO;
+              const rp = getPalette(pair.input, pair.output);
+              return (
+                <div key={idx} className={`flex flex-col gap-2 bg-neutral-800/30 p-3 rounded-lg border shrink-0 ${isLOO ? 'border-amber-700/40 bg-amber-950/5' : 'border-neutral-800'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Pair {idx+1}</span>
+                    {isLOO && <span className="text-[9px] font-bold text-amber-500 bg-amber-950/60 px-1.5 py-0.5 rounded uppercase tracking-wider">LOO held-out</span>}
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <GridBlock title="Train Problem" grid={pair.input} sharedPalette={rp} showDifferences={showDifferences} trainAverages={activeTaskTrainAverages}/>
+                    <ChevRightIcon className="w-4 h-4 text-neutral-600 mt-2"/>
+                    <GridBlock title="Train Solution" grid={pair.output} referenceGrid={pair.input} sharedPalette={rp} showDifferences={showDifferences}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+      {pairCount > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider">Test & Submissions</h3>
+            <div className="flex-1 h-px bg-neutral-800 ml-4"/>
+          </div>
+          <div className="flex flex-col gap-4">
+            {Array.from({length:pairCount}).map((_,idx)=>{
+              const ig=task?.test?.[idx]?.input;
+              const exp=getExpectedOutput(challenges,solutions,taskId,idx);
+              const s1=sub1?sub1[idx]:null, s2=sub2?sub2[idx]:null;
+              const rp=getPalette(ig,exp,s1?.attempt_1,s1?.attempt_2,s2?.attempt_1,s2?.attempt_2);
+              return (
+                <div key={idx} className="flex flex-col gap-3 bg-neutral-800/30 p-4 rounded-lg border border-yellow-900/30 shrink-0">
+                  <span className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">Example {idx+1}</span>
+                  <div className="flex flex-wrap items-start gap-4">
+                    {(ig||exp)&&(
+                      <div className="flex flex-col gap-2 bg-neutral-900/40 p-3 rounded-lg border border-neutral-800/50">
+                        <div className="h-[18px] flex items-end"><span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wide">Reference</span></div>
+                        <div className="flex items-start gap-3">
+                          {ig&&<GridBlock title="Eval Problem" grid={ig} sharedPalette={rp} showDifferences={showDifferences} trainAverages={activeTaskTrainAverages}/>}
+                          {exp&&<>{ig&&<div className="mt-8"><ChevRightIcon className="w-4 h-4 text-neutral-600"/></div>}<GridBlock title="Eval Solution" grid={exp} highlight referenceGrid={ig} sharedPalette={rp} showDifferences={showDifferences}/></>}
+                        </div>
+                      </div>
+                    )}
+                    {s1&&(
+                      <div className="flex flex-col gap-2 p-3 border-l-2 border-yellow-500/50 bg-neutral-900/20 rounded-r-lg">
+                        <div className="h-[18px] flex items-end"><span className="text-[10px] font-bold text-yellow-500 uppercase tracking-wide truncate max-w-[200px]" title={sub1Name}>{sub1Name||"Submission 1"}</span></div>
+                        <div className="flex items-start gap-3">
+                          {s1.attempt_1&&<GridBlock title="Attempt 1" grid={s1.attempt_1} evalExpected={exp} overlayExpected={exp} overlayMode={overlayMode} referenceGrid={ig} sharedPalette={rp} showDifferences={showDifferences}/>}
+                          {s1.attempt_2&&<GridBlock title="Attempt 2" grid={s1.attempt_2} evalExpected={exp} overlayExpected={exp} overlayMode={overlayMode} referenceGrid={ig} sharedPalette={rp} showDifferences={showDifferences}/>}
+                        </div>
+                      </div>
+                    )}
+                    {s2&&(
+                      <div className="flex flex-col gap-2 p-3 border-l-2 border-teal-500/50 bg-neutral-900/20 rounded-r-lg">
+                        <div className="h-[18px] flex items-end"><span className="text-[10px] font-bold text-teal-500 uppercase tracking-wide truncate max-w-[200px]" title={sub2Name}>{sub2Name||"Submission 2"}</span></div>
+                        <div className="flex items-start gap-3">
+                          {s2.attempt_1&&<GridBlock title="Attempt 1" grid={s2.attempt_1} evalExpected={exp} overlayExpected={exp} overlayMode={overlayMode} referenceGrid={ig} sharedPalette={rp} showDifferences={showDifferences}/>}
+                          {s2.attempt_2&&<GridBlock title="Attempt 2" grid={s2.attempt_2} evalExpected={exp} overlayExpected={exp} overlayMode={overlayMode} referenceGrid={ig} sharedPalette={rp} showDifferences={showDifferences}/>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ── RunDetailPanel ────────────────────────────────────────────────────────────
+function RunDetailPanel({ run, challenges, taskId }) {
+  if (!run) return null;
+  const { level, complexity, n_train, has_loo,
+    attempt0_baseline_diff, revision_rounds=[], best_round, best_val_match, val_perfect,
+    token_counts, timing, test_outputs } = run;
+  const baselineMatch = attempt0_baseline_diff?.overall_match ?? null;
+
+  // The LOO held-out pair is always train[0] from the challenge data
+  const looInput    = challenges?.[taskId]?.train?.[0]?.input;
+  const looExpected = challenges?.[taskId]?.train?.[0]?.output;
+  const looPalette  = getPalette(looInput, looExpected,
+    ...(revision_rounds.map(r=>r.attempt).filter(Boolean)));
+
+  return (
+    <div className="mt-6 space-y-6 border-t border-neutral-800 pt-5">
+
+      {/* ── Metadata strip ── */}
+      <div className="flex flex-wrap items-center gap-3 bg-neutral-800/40 rounded-xl px-4 py-3 border border-neutral-700/40">
+        {level != null && (
+          <span className="text-sm font-bold text-purple-300 bg-purple-950/60 px-2.5 py-1 rounded-lg border border-purple-800/40">L{level}</span>
+        )}
+        {complexity != null && (
+          <div className="text-[11px] text-neutral-400">complexity <span className="font-mono text-neutral-200 font-bold">{complexity}</span></div>
+        )}
+        {n_train != null && (
+          <div className="text-[11px] text-neutral-400"><span className="font-mono text-neutral-200 font-bold">{n_train}</span> train pairs</div>
+        )}
+        {has_loo && best_val_match != null && (
+          <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border ${val_perfect
+            ? 'text-green-300 bg-green-950/60 border-green-800/40'
+            : 'text-blue-300 bg-blue-950/60 border-blue-800/40'}`}>
+            {val_perfect ? '★' : '◎'} LOO {Math.round(best_val_match*100)}%
+            {baselineMatch!=null && best_val_match !== baselineMatch && (
+              <span className={`ml-1.5 text-[10px] ${best_val_match>baselineMatch?'text-green-400':'text-red-400'}`}>
+                ({best_val_match>baselineMatch?'+':''}{Math.round((best_val_match-baselineMatch)*100)}%)
+              </span>
+            )}
+          </span>
+        )}
+        <div className="flex-1"/>
+        {/* Timing row */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-[10px]">
+          {timing?.total_seconds != null && (
+            <span className="text-neutral-300 font-bold">
+              {timing.total_seconds.toFixed(0)}s <span className="font-normal text-neutral-600">total</span>
+            </span>
+          )}
+          {(timing?.ttt_seconds||[]).map((s,i)=>(
+            <span key={i} className="text-neutral-500">TTT{i>0?` #${i+1}`:''} <span className="font-mono text-blue-400">{s.toFixed(0)}s</span></span>
+          ))}
+          {(timing?.loo_inference_seconds||[]).map((s,i)=>(
+            <span key={i} className="text-neutral-500">LOO inf{i>0?` #${i+1}`:''} <span className="font-mono text-amber-400">{s.toFixed(0)}s</span></span>
+          ))}
+          {timing?.test_inference_seconds != null && (
+            <span className="text-neutral-500">test inf <span className="font-mono text-yellow-400">{timing.test_inference_seconds.toFixed(0)}s</span></span>
+          )}
+          {token_counts?.loo_prompt_tokens != null && (
+            <span className="text-neutral-600">LOO tok <span className="font-mono text-neutral-500">{token_counts.loo_prompt_tokens}</span></span>
+          )}
+          {token_counts?.test_prompt_tokens != null && (
+            <span className="text-neutral-600">test tok <span className="font-mono text-neutral-500">{token_counts.test_prompt_tokens}</span></span>
+          )}
+        </div>
+      </div>
+
+      {/* ── LOO Validation ── */}
+      {has_loo && revision_rounds.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider">LOO Validation</h3>
+            <span className="text-[10px] text-neutral-600">train[0] held out — model predicts it after each TTT round to check improvement</span>
+            <div className="flex-1 h-px bg-neutral-800 ml-2"/>
+          </div>
+
+          <div className="flex items-start gap-5 overflow-x-auto custom-scrollbar pb-3">
+
+            {/* Reference block: LOO input + expected output */}
+            <div className="flex flex-col gap-3 shrink-0">
+              <div className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Reference (train[0])</div>
+              <div className="flex flex-col gap-2 bg-neutral-800/30 p-3 rounded-xl border border-amber-800/30">
+                {looInput
+                  ? <GridBlock title="LOO Input" grid={looInput} sharedPalette={looPalette} showDifferences={false}/>
+                  : <div className="text-[10px] text-neutral-600 italic">load challenge file to see grid</div>}
+                {looInput && looExpected && <ChevDownIcon className="w-4 h-4 text-neutral-600 mx-auto"/>}
+                {looExpected
+                  ? <GridBlock title="Expected Output" grid={looExpected} referenceGrid={looInput} sharedPalette={looPalette} showDifferences={false} highlight/>
+                  : <div className="text-[10px] text-neutral-600 italic">load challenge file to see grid</div>}
+              </div>
+            </div>
+
+            {/* Arrow separator */}
+            <div className="flex items-center self-center shrink-0 pt-6">
+              <ChevRightIcon className="w-5 h-5 text-neutral-600"/>
+            </div>
+
+            {/* Per-round attempts */}
+            <div className="flex items-start gap-3 shrink-0">
+              {revision_rounds.map((rnd, i) => {
+                const isBest = i === best_round;
+                const match = rnd.diff?.overall_match ?? 0;
+                const mp = Math.round(match * 100);
+                const bc = match===1?'#4ade80':mp>=80?'#60a5fa':mp>=60?'#facc15':'#f87171';
+                const bp = baselineMatch!=null ? Math.round(baselineMatch*100) : 0;
+                const ops = (rnd.operations||[]).map(o=>o.type).filter(t=>t!=='pixel_diff'&&t!=='same_size').join(' · ');
+                const xv = rnd.cross_validation||[];
+                const xOk = xv.filter(c=>c.cross_correct).length;
+                return (
+                  <div key={i} className={`flex flex-col gap-2.5 p-3 rounded-xl border shrink-0 ${isBest
+                    ? 'border-green-500/40 bg-green-950/10'
+                    : 'border-neutral-700/50 bg-neutral-800/20'}`} style={{minWidth:160}}>
+                    {/* Round header */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[11px] font-bold ${isBest?'text-green-400':'text-neutral-400'}`}>
+                        Round {rnd.round}
+                      </span>
+                      {isBest && <span className="text-[9px] text-green-600 uppercase tracking-wider font-bold">best</span>}
+                      <span className="ml-auto text-[11px] font-mono font-bold" style={{color:bc}}>{mp}%</span>
+                    </div>
+                    {/* Match bar */}
+                    <div className="h-1.5 bg-neutral-700 rounded-full overflow-hidden relative">
+                      {baselineMatch!=null && <div className="absolute h-full bg-neutral-500/50 rounded-full" style={{width:`${bp}%`}}/>}
+                      <div className="absolute h-full rounded-full" style={{width:`${mp}%`,background:bc}}/>
+                    </div>
+                    {/* LOO attempt grid */}
+                    <GridBlock
+                      title="LOO Attempt"
+                      grid={rnd.attempt}
+                      evalExpected={looExpected}
+                      overlayExpected={looExpected}
+                      overlayMode={false}
+                      referenceGrid={looInput||undefined}
+                      sharedPalette={looPalette}
+                      showDifferences={false}
+                    />
+                    {/* Timing + ops */}
+                    <div className="text-[9px] space-y-0.5 text-neutral-600">
+                      {rnd.elapsed_s != null && <div><span className="font-mono">{rnd.elapsed_s.toFixed(0)}s</span> · {rnd.cumulative_epochs}ep</div>}
+                      {ops && <div className="text-neutral-500">{ops}</div>}
+                      {xv.length>0 && (
+                        <div className={xOk>0?'text-green-600':'text-neutral-600'}>
+                          cross-val {xOk}/{xv.length} ok
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Test Output Candidates ── */}
+      {test_outputs && Object.keys(test_outputs).length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-sm font-bold text-yellow-400 uppercase tracking-wider">Test Output Candidates</h3>
+            <span className="text-[10px] text-neutral-600">beam search results — grids not stored, color counts only</span>
+            <div className="flex-1 h-px bg-neutral-800 ml-2"/>
+          </div>
+          {Object.entries(test_outputs).map(([pi, pair]) => (
+            <div key={pi} className="mb-3">
+              <div className="text-[10px] text-neutral-500 mb-2">
+                test pair {pi} · <span className="font-mono text-neutral-400">{pair.n_beams}</span> beams
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(pair.top_candidates||[]).slice(0,10).map((cand, ci) => {
+                  const cols = Object.entries(cand.attempt_color_counts||{});
+                  return (
+                    <div key={ci} className="bg-neutral-800/50 border border-neutral-700/60 rounded-lg p-2.5 text-[9px]" style={{minWidth:110}}>
+                      <div className="text-neutral-600 mb-2 font-mono text-[8px] leading-relaxed">
+                        #{ci+1}<br/>
+                        nll={cand.beam_nll?.toFixed(3)}<br/>
+                        aug={cand.aug_score_mean?.toFixed(2)}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {cols.map(([c,n]) => (
+                          <div key={c} className="flex items-center gap-1">
+                            <div className="w-3 h-3 shrink-0" style={{background:ARC_COLORS[+c]||'#000'}}/>
+                            <span className="text-neutral-300 font-mono font-bold">{n}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ── Main App ──────────────────────────────────────────────────────────────────
+function App() {
+  const [challenges,   setChallenges]   = useState({});
+  const [solutions,    setSolutions]    = useState({});
+  const [submission1,  setSubmission1]  = useState({});
+  const [submission2,  setSubmission2]  = useState({});
+  const [detailedRuns, setDetailedRuns] = useState({});
+  const [complexityData, setComplexityData] = useState(()=>{
+    try{const c=localStorage.getItem('arcComplexityData');return c?JSON.parse(c):{}}catch(e){return{}}
+  });
+  const [sub1Name, setSub1Name] = useState('');
+  const [sub2Name, setSub2Name] = useState('');
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [error, setError] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [jszipLoaded, setJszipLoaded] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isBottomPanelOpen, setIsBottomPanelOpen] = useState(true);
+  const [filterRealAttempts, setFilterRealAttempts] = useState(false);
+  const [filterWithSubmissions, setFilterWithSubmissions] = useState(false);
+  const [filterSolvedSub1, setFilterSolvedSub1] = useState(false);
+  const [filterSolvedSub2, setFilterSolvedSub2] = useState(false);
+  const [disabledLevels, setDisabledLevels] = useState(new Set());
+  const [overlayMode, setOverlayMode] = useState(false);
+  const [showDifferences, setShowDifferences] = useState(true);
+  const [loadSummary, setLoadSummary] = useState({});
+
+  const sub1Count = Object.keys(submission1).length;
+
+  useEffect(()=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.async=true; s.onload=()=>setJszipLoaded(true); document.body.appendChild(s);
+    return ()=>document.body.removeChild(s);
+  },[]);
+
+  useEffect(()=>{
+    const h=(e)=>{ if(e.code==='Space'&&e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA'){e.preventDefault();setOverlayMode(p=>!p);} };
+    window.addEventListener('keydown',h); return ()=>window.removeEventListener('keydown',h);
+  },[]);
+
+  // Auto-load from results/submissions/latest via viewer_server.py API
+  useEffect(()=>{
+    fetch('/api/list-latest')
+      .then(r=>r.ok?r.json():null)
+      .catch(()=>null)
+      .then(listing=>{
+        if(!listing||!listing.files||!listing.files.length) return;
+        const files=listing.files;
+        let remaining=files.length;
+        const results=[];
+        files.forEach(({name,src})=>{
+          const url=src==='bundled'
+            ? `/api/file-bundled/${encodeURIComponent(name)}`
+            : `/api/file/${encodeURIComponent(name)}`;
+          fetch(url)
+            .then(r=>r.ok?r.json():null)
+            .catch(()=>null)
+            .then(data=>{
+              if(data){
+                const type=detectFileType(name,data);
+                if(type) results.push({type,data,name});
+              }
+              if(--remaining===0){
+                results.sort((a,b)=>a.name.localeCompare(b.name));
+                let subIdx=0;
+                results.forEach(({type,data,name})=>{
+                  if(type==='submission'){
+                    applyData(subIdx===0?'sub1':'sub2',data,name,true);
+                    subIdx++;
+                  } else {
+                    applyData(type,data,name,true);
+                  }
+                });
+                const types=results.map(r=>r.type);
+                const summary=types.reduce((a,t)=>{a[t]=(a[t]||0)+1;return a},{});
+                setLoadSummary({...summary,_source:'auto'});
+              }
+            });
+        });
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  const ingestDetailed = useCallback((data) => {
+    const entries={};
+    if (data?.puzzle_id && typeof data.puzzle_id==='string') {
+      entries[data.puzzle_id]=data;
+    } else if (data && typeof data==='object') {
+      for (const [k,v] of Object.entries(data)) {
+        if (v && typeof v==='object' && (v.puzzle_id||v.revision_rounds!=null||v.level!=null)) entries[k]=v;
+      }
+    }
+    return entries;
+  },[]);
+
+  const applyData = useCallback((type, data, filename='', sub1IsFull=false) => {
+    const pick = (id) => setSelectedTaskId(p=>p||id);
+    if (type==='challenges') {
+      setChallenges(d=>({...d,...data}));
+      const fk=Object.keys(data)[0]; if(fk) pick(fk);
+      setLoadSummary(s=>({...s, challenges:(Object.keys(s.challenges||{}).length||0)+Object.keys(data).length}));
+    } else if (type==='solutions') {
+      setSolutions(d=>({...d,...data}));
+      const fk=Object.keys(data)[0]; if(fk) pick(fk);
+    } else if (type==='sub1' || (type==='submission' && sub1IsFull)) {
+      setSubmission1(data); setSub1Name(filename);
+      const fk=Object.keys(data)[0]; if(fk) pick(fk);
+    } else if (type==='sub2' || (type==='submission' && !sub1IsFull)) {
+      setSubmission2(data); setSub2Name(filename);
+      const fk=Object.keys(data)[0]; if(fk) pick(fk);
+    } else if (type==='detailed') {
+      const entries=ingestDetailed(data);
+      setDetailedRuns(p=>{const m={...p,...entries}; return m;});
+      // auto-populate complexityData from detailed runs
+      const comp={};
+      Object.values(entries).forEach(p=>{
+        if(p.puzzle_id&&p.level!=null) comp[p.puzzle_id]={level:String(p.level),complexity:p.complexity,...p};
+      });
+      if(Object.keys(comp).length) {
+        setComplexityData(p=>{const m={...p,...comp};localStorage.setItem('arcComplexityData',JSON.stringify(m));return m;});
+      }
+      const fk=Object.keys(entries)[0]; if(fk) pick(fk);
+    } else if (type==='analysis') {
+      let arr=[];
+      if(Array.isArray(data)) arr=data;
+      else if(data.puzzles&&Array.isArray(data.puzzles)) arr=data.puzzles;
+      else { const ak=Object.keys(data).find(k=>Array.isArray(data[k])&&data[k][0]&&'id' in data[k][0]); if(ak) arr=data[ak]; }
+      const comp={}; arr.forEach(p=>{if(p.id){const lk=Object.keys(p).find(k=>k.startsWith('level'));comp[p.id]={level:String(lk?p[lk]:(p.complexity??'Uncategorized')),...p};}});
+      setComplexityData(comp); localStorage.setItem('arcComplexityData',JSON.stringify(comp));
+    }
+  },[ingestDetailed]);
+
+  // Single-file upload (original behavior)
+  const handleFileUpload = (e, type) => {
+    const file=e.target.files[0]; if(!file) return;
+    const r=new FileReader();
+    r.onload=ev=>{try{applyData(type,JSON.parse(ev.target.result),file.name,type==='sub1'||sub1Count===0);setError(null);}catch(err){setError(`${file.name}: ${err.message}`);}};
+    r.readAsText(file);
+  };
+
+  // Folder upload with auto-detection
+  const handleFolderUpload = (e) => {
+    const files=Array.from(e.target.files).filter(f=>f.name.toLowerCase().endsWith('.json'));
+    if(!files.length){setError('No JSON files found in folder');return;}
+    const results=[], remaining={n:files.length};
+    files.forEach(file=>{
+      const r=new FileReader();
+      r.onload=ev=>{
+        try{ const data=JSON.parse(ev.target.result); const type=detectFileType(file.name,data); if(type) results.push({type,data,name:file.name}); }
+        catch(e){}
+        if(--remaining.n===0){
+          results.sort((a,b)=>a.name.localeCompare(b.name));
+          let subIdx=0;
+          results.forEach(({type,data,name})=>{
+            if(type==='submission'){
+              applyData(subIdx===0?'sub1':'sub2',data,name,true);
+              subIdx++;
+            } else {
+              applyData(type,data,name,true);
+            }
+          });
+          setError(null);
+          const types=results.map(r=>r.type);
+          const summary=types.reduce((a,t)=>{a[t]=(a[t]||0)+1;return a},{});
+          setLoadSummary(summary);
+        }
+      };
+      r.readAsText(file);
+    });
+  };
+
+  const getTaskStatus = (taskId, sub) => {
+    if(!sub) return null;
+    let hasSol=false, allOk=true;
+    const pc=getPairCount(challenges,solutions,submission1[taskId],submission2[taskId],taskId);
+    for(let i=0;i<pc;i++){
+      const exp=getExpectedOutput(challenges,solutions,taskId,i); if(!exp) continue;
+      hasSol=true; const sp=sub[i]; if(!sp){allOk=false;break;}
+      if(!gridsMatch(sp.attempt_1,exp)&&!gridsMatch(sp.attempt_2,exp)){allOk=false;break;}
+    }
+    return hasSol?allOk:null;
+  };
+
+  const allTaskIds = useMemo(()=>Array.from(new Set([
+    ...Object.keys(challenges),...Object.keys(solutions),
+    ...Object.keys(submission1),...Object.keys(submission2),
+    ...Object.keys(detailedRuns),
+  ])).sort(),[challenges,solutions,submission1,submission2,detailedRuns]);
+
+  const hasAnalysis = Object.keys(complexityData).length>0;
+
+  const activeLevelsArray = useMemo(()=>{
+    if(!hasAnalysis) return [];
+    const s=new Set(allTaskIds.map(id=>complexityData[id]?.level??'Uncategorized'));
+    return Array.from(s).sort((a,b)=>a.toString().localeCompare(b.toString(),undefined,{numeric:true}));
+  },[allTaskIds,complexityData,hasAnalysis]);
+
+  const displayIds = useMemo(()=>allTaskIds.filter(id=>{
+    const hasSub=!!submission1[id]||!!submission2[id];
+    const isReal=hasRealAttempt(submission1[id])||hasRealAttempt(submission2[id]);
+    if(filterRealAttempts&&!isReal) return false;
+    if(filterWithSubmissions&&!hasSub) return false;
+    if(filterSolvedSub1&&!getTaskStatus(id,submission1[id])) return false;
+    if(filterSolvedSub2&&!getTaskStatus(id,submission2[id])) return false;
+    if(hasAnalysis){const lvl=complexityData[id]?.level??'Uncategorized';if(disabledLevels.has(lvl))return false;}
+    return true;
+  }),[allTaskIds,submission1,submission2,filterRealAttempts,filterWithSubmissions,filterSolvedSub1,filterSolvedSub2,disabledLevels,complexityData,hasAnalysis]);
+
+  const activeTaskTrainAverages = useMemo(()=>{
+    if(!selectedTaskId||!challenges[selectedTaskId]) return null;
+    return computeTrainAverages(challenges[selectedTaskId]);
+  },[selectedTaskId,challenges]);
+
+  // Export (preserved)
+  const drawTaskToCanvas = (taskId, task, sub1, sub2, taskIndex) => new Promise(resolve=>{
+    const CS=24,PAD=30,HH=60,LH=24,RS=50;
+    let th=HH+PAD,mw=400;
+    const gd=(g)=>(!g||!Array.isArray(g)||!Array.isArray(g[0]))?{w:0,h:0}:{w:g[0].length*CS,h:g.length*CS};
+    const rows=[], ta=computeTrainAverages(task);
+    if(task?.train) task.train.forEach((p,i)=>{
+      const rp=getPalette(p.input,p.output);
+      rows.push({title:`Training Pair ${i+1}`,palette:rp,items:[{label:'Train Problem',grid:p.input,type:'neutral',refGrid:null,trainAverages:ta},{label:'Train Solution',grid:p.output,type:'neutral',refGrid:p.input}]});
+    });
+    const pc=getPairCount(challenges,solutions,sub1,sub2,taskId);
+    for(let i=0;i<pc;i++){
+      const ig=task?.test?.[i]?.input,exp=getExpectedOutput(challenges,solutions,taskId,i);
+      const s1=sub1?sub1[i]:null,s2=sub2?sub2[i]:null;
+      const rp=getPalette(ig,exp,s1?.attempt_1,s1?.attempt_2,s2?.attempt_1,s2?.attempt_2);
+      const items=[];
+      if(ig) items.push({label:'Eval Problem',grid:ig,type:'neutral',refGrid:null,trainAverages:ta});
+      if(exp) items.push({label:'Eval Solution',grid:exp,type:'expected',refGrid:ig});
+      if(s1?.attempt_1) items.push({label:'Sub1 Att1',grid:s1.attempt_1,type:exp?(gridsMatch(s1.attempt_1,exp)?'pass':'fail'):'neutral',refGrid:ig});
+      if(s1?.attempt_2) items.push({label:'Sub1 Att2',grid:s1.attempt_2,type:exp?(gridsMatch(s1.attempt_2,exp)?'pass':'fail'):'neutral',refGrid:ig});
+      if(s2?.attempt_1) items.push({label:'Sub2 Att1',grid:s2.attempt_1,type:exp?(gridsMatch(s2.attempt_1,exp)?'pass':'fail'):'neutral',refGrid:ig});
+      if(s2?.attempt_2) items.push({label:'Sub2 Att2',grid:s2.attempt_2,type:exp?(gridsMatch(s2.attempt_2,exp)?'pass':'fail'):'neutral',refGrid:ig});
+      if(items.length) rows.push({title:`Eval Pair ${i+1}`,items,isTest:true,palette:rp});
+    }
+    const lr=[];
+    for(const row of rows){
+      let rh=0,rw=PAD;const il=[];
+      for(const item of row.items){
+        const d=gd(item.grid),rd=item.refGrid?gd(item.refGrid):{w:0,h:0};
+        const bw=Math.max(d.w,rd.w),bh=Math.max(d.h,rd.h);
+        const hs=item.refGrid||item.trainAverages,lh=(row.palette.length*16)+(hs?90:0)+10,mp=hs?190:160;
+        const ih=bh+LH+15+lh,iw=Math.max(bw,mp);
+        if(ih>rh)rh=ih;
+        il.push({...item,x:rw,y:0,w:bw,h:bh,igw:d.w,igh:d.h,iw});rw+=iw+PAD*1.5;
+      }
+      if(rw>mw)mw=rw;lr.push({...row,items:il,height:rh+LH*2,y:th});th+=rh+LH*2+RS;
+    }
+    const cv=document.createElement('canvas');cv.width=mw;cv.height=th;
+    const ctx=cv.getContext('2d');
+    ctx.fillStyle='#121212';ctx.fillRect(0,0,mw,th);
+    ctx.fillStyle='#fff';ctx.font='bold 24px Inter,system-ui,sans-serif';
+    ctx.fillText(`ARC Task ${taskIndex}: ${taskId}`,PAD,35);
+    for(const row of lr){
+      ctx.fillStyle=row.isTest?'#FACC15':'#60A5FA';ctx.font='bold 16px Inter,system-ui,sans-serif';
+      ctx.fillText(row.title,PAD,row.y);
+      for(const item of row.items){
+        const sx=item.x,sy=row.y+10;
+        let lt=item.label;
+        ctx.fillStyle=item.type==='pass'?'#4ADE80':item.type==='expected'?'#4ADE80':item.type==='fail'?'#F87171':'#E5E5E5';
+        if(item.type==='pass')lt=`✔ ${lt}`;if(item.type==='fail')lt=`✘ ${lt}`;
+        ctx.font='12px Inter,system-ui,sans-serif';ctx.fillText(lt,sx,sy+12);
+        const gy=sy+20;
+        if(item.igw>0&&item.igh>0){
+          if(item.type==='pass'||item.type==='expected'){ctx.fillStyle='#22c55e';ctx.fillRect(sx-2,gy-2,item.igw+4,item.igh+4);}
+          else if(item.type==='fail'){ctx.fillStyle='#ef4444';ctx.fillRect(sx-2,gy-2,item.igw+4,item.igh+4);}
+          else{ctx.fillStyle='#333';ctx.fillRect(sx,gy,item.igw+2,item.igh+2);}
+          for(let r=0;r<item.grid.length;r++) for(let c=0;c<item.grid[r].length;c++){
+            ctx.fillStyle=ARC_COLORS[item.grid[r][c]]||'#000';
+            const bo=(item.type==='pass'||item.type==='fail'||item.type==='expected')?-1:1;
+            ctx.fillRect(sx+bo+c*CS,gy+bo+r*CS,CS-1,CS-1);
+          }
+          const cnt=getColorCounts(item.grid),rc=item.refGrid?getColorCounts(item.refGrid):null;
+          let ly=gy+item.h+16;
+          row.palette.forEach(ci=>{
+            const cnt2=cnt[ci],rc2=rc?rc[ci]:0,diff=cnt2-rc2;
+            let ps='';if(rc&&diff!==0)ps=rc2===0?'∞%':`${((diff/rc2)*100).toFixed(0)}%`;
+            ctx.fillStyle=ARC_COLORS[ci]||'#000';ctx.fillRect(sx,ly-8,8,8);
+            ctx.font='10px Inter,system-ui,sans-serif';
+            if(showDifferences&&rc){
+              ctx.fillStyle='#6B7280';ctx.fillText(`${rc2}`,sx+16,ly);const w1=ctx.measureText(`${rc2}`).width;
+              ctx.fillStyle='#4B5563';ctx.fillText('->',sx+16+w1+4,ly);const wa=ctx.measureText('->').width;
+              ctx.fillStyle='#D1D5DB';ctx.fillText(`${cnt2}`,sx+16+w1+4+wa+4,ly);const w2=ctx.measureText(`${cnt2}`).width;
+              if(diff!==0){ctx.fillStyle=diff>0?'#4ADE80':'#F87171';ctx.fillText(`(${diff>0?'+':''}${diff},${diff>0?'+':''}${ps})`,sx+16+w1+4+wa+4+w2+6,ly);}
+            }else{ctx.fillStyle='#9CA3AF';ctx.fillText(`${cnt2}`,sx+16,ly);}
+            ly+=16;
+          });
+        }else{ctx.fillStyle='#EF4444';ctx.fillText('Invalid Grid',sx,gy+15);}
+      }
+    }
+    resolve(cv.toDataURL('image/png'));
+  });
+
+  const exportCurrentTask = async () => {
+    if(!selectedTaskId) return;
+    setIsExporting(true);
+    const url=await drawTaskToCanvas(selectedTaskId,challenges[selectedTaskId],submission1[selectedTaskId],submission2[selectedTaskId],allTaskIds.indexOf(selectedTaskId)+1);
+    const a=document.createElement('a');a.href=url;a.download=`ARC_${selectedTaskId}.png`;a.click();
+    setIsExporting(false);
+  };
+
+  const exportAllTasksToZip = async () => {
+    if(!jszipLoaded||!window.JSZip){setError('ZIP not loaded yet');return;}
+    setIsExporting(true);setExportProgress(0);
+    try{
+      const zip=new window.JSZip(),folder=zip.folder('arc_task_visualizations');
+      for(let i=0;i<displayIds.length;i++){
+        const tid=displayIds[i],url=await drawTaskToCanvas(tid,challenges[tid],submission1[tid],submission2[tid],allTaskIds.indexOf(tid)+1);
+        folder.file(`${tid}.png`,url.split(',')[1],{base64:true});
+        setExportProgress(Math.round(((i+1)/displayIds.length)*100));
+      }
+      const blob=await zip.generateAsync({type:'blob'});
+      const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='arc_task_visualizations.zip';a.click();
+    }catch(err){setError('Export failed: '+err.message);}
+    setIsExporting(false);setExportProgress(0);
+  };
+
+  const hasSub1=sub1Count>0, hasSub2=Object.keys(submission2).length>0;
+  const stats={overall:{total:0,s1Correct:0,s2Correct:0},byLevel:{}};
+  allTaskIds.forEach(id=>{
+    let hgt=false;const pc=getPairCount(challenges,solutions,submission1[id],submission2[id],id);
+    for(let i=0;i<pc;i++) if(getExpectedOutput(challenges,solutions,id,i)){hgt=true;break;}
+    if(hgt){
+      const lv=hasAnalysis?(complexityData[id]?.level??'Uncategorized'):'Uncategorized';
+      if(!stats.byLevel[lv]) stats.byLevel[lv]={total:0,s1Correct:0,s2Correct:0};
+      stats.overall.total++;stats.byLevel[lv].total++;
+      if(hasSub1&&getTaskStatus(id,submission1[id])===true){stats.overall.s1Correct++;stats.byLevel[lv].s1Correct++;}
+      if(hasSub2&&getTaskStatus(id,submission2[id])===true){stats.overall.s2Correct++;stats.byLevel[lv].s2Correct++;}
+    }
+  });
+
+  const mismatchCount=new Set([
+    ...Object.keys(submission1).filter(id=>!challenges[id]&&!solutions[id]),
+    ...Object.keys(submission2).filter(id=>!challenges[id]&&!solutions[id]),
+  ]).size;
+
+  const renderScore=(correct,total)=>{
+    if(!total) return <span className="text-neutral-600">-</span>;
+    const pct=((correct/total)*100).toFixed(1);
+    return <div className="flex items-center gap-1.5 whitespace-nowrap">
+      <span className="text-green-400 font-medium">{correct} ✓</span>
+      <span className="text-neutral-600">·</span>
+      <span className="text-red-400">{total-correct} ✗</span>
+      <span className="text-neutral-500 text-[10px] ml-1">/ {total}</span>
+      <span className="text-blue-400 font-bold ml-2">{pct}%</span>
+    </div>;
+  };
+
+  const hasAnyData = allTaskIds.length>0;
+
+  return (
+    <div className="flex h-screen w-full bg-neutral-900 text-neutral-100 font-sans overflow-hidden">
+
+      {/* ── Sidebar ── */}
+      <div className={`transition-all duration-300 ease-in-out shrink-0 bg-neutral-950 border-r border-neutral-800 flex flex-col h-full z-20 overflow-hidden ${isSidebarOpen?'w-[340px]':'w-0 border-r-0'}`}>
+        <div className="w-[340px] flex flex-col h-full">
+
+          {/* Upload area */}
+          <div className="p-4 border-b border-neutral-800 space-y-3 shrink-0 overflow-y-auto max-h-[62vh] custom-scrollbar">
+            <div className="flex items-center justify-between">
+              <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                <PlayIcon className="w-5 h-5 text-blue-500"/> ARC Viewer
+              </h1>
+            </div>
+
+            {/* ── Folder loader (primary) ── */}
+            <div>
+              <label className="block text-[10px] font-bold text-blue-400 mb-1 uppercase tracking-wider">📁 Open Folder (auto-detects all file types)</label>
+              <label className="flex items-center justify-center w-full p-3 border-2 border-dashed border-blue-600/40 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-500/5 transition-colors bg-blue-950/20">
+                <FolderIcon className="w-4 h-4 mr-2 text-blue-400"/>
+                <span className="text-[11px] text-blue-300 font-medium">
+                  {hasAnyData
+                    ? `${allTaskIds.length} tasks loaded${loadSummary._source==='auto'?' (auto)':''} — click to reload folder`
+                    : 'Select folder…'}
+                </span>
+                <input type="file" multiple className="hidden" onChange={handleFolderUpload}
+                  ref={el=>{ if(el) { el.setAttribute('webkitdirectory',''); el.setAttribute('directory',''); } }}/>
+              </label>
+              {Object.keys(loadSummary).filter(k=>k!=='_source').length>0&&(
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {loadSummary._source==='auto'&&<span className="text-[9px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">⚡ auto</span>}
+                  {loadSummary.challenges&&<span className="text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">{loadSummary.challenges}ch</span>}
+                  {loadSummary.solutions&&<span className="text-[9px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded">{loadSummary.solutions}sol</span>}
+                  {loadSummary.submission&&<span className="text-[9px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded">{loadSummary.submission}sub</span>}
+                  {loadSummary.detailed&&<span className="text-[9px] bg-pink-500/20 text-pink-400 px-1.5 py-0.5 rounded">{loadSummary.detailed} detailed</span>}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 text-[9px] text-neutral-700">
+              <div className="flex-1 h-px bg-neutral-800"/>or upload individually<div className="flex-1 h-px bg-neutral-800"/>
+            </div>
+
+            {/* Individual file loaders */}
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                {label:'Challenges',type:'challenges',color:'blue',count:Object.keys(challenges).length},
+                {label:'Solutions',type:'solutions',color:'purple',count:Object.keys(solutions).length},
+                {label:'Sub 1',type:'sub1',color:'yellow',loaded:hasSub1,name:sub1Name},
+                {label:'Sub 2',type:'sub2',color:'teal',loaded:hasSub2,name:sub2Name},
+              ].map(f=>(
+                <div key={f.type}>
+                  <label className="block text-[10px] font-bold text-neutral-500 mb-1 uppercase tracking-wider">{f.label}</label>
+                  <label className={`flex items-center justify-center w-full p-2 border border-dashed border-neutral-700 rounded-lg cursor-pointer hover:border-${f.color}-500 hover:bg-${f.color}-500/10 transition-colors`} title={f.name}>
+                    <UploadIcon className={`w-3 h-3 mr-1.5 text-${f.color}-400`}/>
+                    <span className="text-[10px] truncate">{f.count>0?`${f.count} loaded`:f.loaded?'Loaded':'Upload'}</span>
+                    <input type="file" accept=".json" className="hidden" onChange={e=>handleFileUpload(e,f.type)}/>
+                  </label>
+                </div>
+              ))}
+              <div className="col-span-2">
+                <label className="block text-[10px] font-bold text-neutral-500 mb-1 uppercase tracking-wider">Run Details (submission_detailed*.json)</label>
+                <label className="flex items-center justify-center w-full p-2 border border-dashed border-neutral-700 rounded-lg cursor-pointer hover:border-pink-500 hover:bg-pink-500/10 transition-colors">
+                  <UploadIcon className="w-3 h-3 mr-1.5 text-pink-400"/>
+                  <span className="text-[10px] truncate">{Object.keys(detailedRuns).length>0?`${Object.keys(detailedRuns).length} puzzles`:'Upload (multi-select ok)'}</span>
+                  <input type="file" accept=".json" multiple className="hidden" onChange={e=>{Array.from(e.target.files).forEach(f=>{const r=new FileReader();r.onload=ev=>{try{applyData('detailed',JSON.parse(ev.target.result),f.name);}catch(err){setError(`${f.name}: ${err.message}`);}};r.readAsText(f);});}}/>
+                </label>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-[10px] font-bold text-neutral-500 mb-1 uppercase tracking-wider">Analysis JSON (Levels)</label>
+                <label className="flex items-center justify-center w-full p-2 border border-dashed border-neutral-700 rounded-lg cursor-pointer hover:border-pink-500 hover:bg-pink-500/10 transition-colors">
+                  <UploadIcon className="w-3 h-3 mr-1.5 text-pink-400"/>
+                  <span className="text-[10px] truncate">{hasAnalysis?'Loaded / Cached':'Upload'}</span>
+                  <input type="file" accept=".json" className="hidden" onChange={e=>handleFileUpload(e,'analysis')}/>
+                </label>
+              </div>
+            </div>
+
+            {/* Filters */}
+            {hasAnyData&&(
+              <div className="space-y-2 pt-3 border-t border-neutral-800">
+                <h3 className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1">
+                  <FilterIcon className="w-3 h-3"/> Filters & Viewing
+                </h3>
+                <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+                  {[
+                    {label:'Has Submissions',state:filterWithSubmissions,set:setFilterWithSubmissions,color:'blue'},
+                    {label:'Real Attempts Only',state:filterRealAttempts,set:setFilterRealAttempts,color:'yellow'},
+                    {label:'Show Legend Diffs',state:showDifferences,set:setShowDifferences,color:'purple'},
+                    ...(hasSub1||hasSub2?[
+                      {label:'S1 Solved Only',state:filterSolvedSub1,set:setFilterSolvedSub1,color:'green'},
+                      {label:'S2 Solved Only',state:filterSolvedSub2,set:setFilterSolvedSub2,color:'green'},
+                    ]:[]),
+                  ].map(f=>(
+                    <label key={f.label} className="flex items-center gap-1.5 text-[11px] text-neutral-300 cursor-pointer hover:text-white">
+                      <input type="checkbox" checked={f.state} onChange={e=>f.set(e.target.checked)} className="rounded border-neutral-700 bg-neutral-800"/>
+                      {f.label}
+                    </label>
+                  ))}
+                </div>
+                {activeLevelsArray.length>0&&(
+                  <div className="pt-2 border-t border-neutral-800/50">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[11px] font-bold text-pink-400 uppercase tracking-wider">Levels</label>
+                      <button className="text-[9px] text-neutral-400 hover:text-white" onClick={()=>disabledLevels.size===0?setDisabledLevels(new Set(activeLevelsArray)):setDisabledLevels(new Set())}>Toggle All</button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {activeLevelsArray.map(lvl=>{
+                        const on=!disabledLevels.has(lvl);
+                        return <label key={lvl} className="flex items-center gap-1 text-[11px] text-neutral-300 cursor-pointer hover:text-white bg-neutral-900 px-2 py-1 rounded border border-neutral-800">
+                          <input type="checkbox" checked={on} onChange={e=>{const s=new Set(disabledLevels);e.target.checked?s.delete(lvl):s.add(lvl);setDisabledLevels(s);}} className="rounded border-neutral-700 bg-neutral-800 text-pink-500 w-3 h-3"/>
+                          {lvl}
+                        </label>;
+                      })}
+                    </div>
+                  </div>
+                )}
+                <div className="pt-2 border-t border-neutral-800/50">
+                  <label className="flex items-center gap-1.5 text-[11px] font-bold text-purple-400 cursor-pointer hover:text-purple-300" title="Shortcut: Space">
+                    <input type="checkbox" checked={overlayMode} onChange={e=>setOverlayMode(e.target.checked)} className="rounded border-neutral-700 bg-neutral-800 text-purple-500"/>
+                    <LayersIcon className="w-3.5 h-3.5"/> Overlay Eval Solution (Space)
+                  </label>
+                </div>
+                {mismatchCount>0&&(
+                  <div className="p-2 bg-red-900/20 border border-red-900/50 rounded flex items-start gap-2">
+                    <WarnIcon className="w-3 h-3 text-red-500 shrink-0 mt-0.5"/>
+                    <p className="text-[10px] text-red-400"><strong>Mismatch:</strong> {mismatchCount} sub IDs don't match challenge IDs.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Task list */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-0.5 custom-scrollbar">
+            {displayIds.map(taskId=>{
+              const ai=allTaskIds.indexOf(taskId)+1;
+              const hCh=!!challenges[taskId],hSol=!!solutions[taskId];
+              const hS1=!!submission1[taskId],hS2=!!submission2[taskId];
+              const hDet=!!detailedRuns[taskId];
+              const isMis=(hS1||hS2)&&!hCh&&!hSol;
+              const r1R=hasRealAttempt(submission1[taskId]),r2R=hasRealAttempt(submission2[taskId]);
+              const s1St=getTaskStatus(taskId,submission1[taskId]),s2St=getTaskStatus(taskId,submission2[taskId]);
+              const run=detailedRuns[taskId],lm=run?.best_val_match,lp=run?.val_perfect;
+              return (
+                <button key={taskId} onClick={()=>setSelectedTaskId(taskId)}
+                  className={`w-full text-left px-2 py-2 rounded-md flex items-center text-sm transition-colors ${selectedTaskId===taskId?'bg-blue-600 text-white':'text-neutral-300 hover:bg-neutral-800'}`}>
+                  <span className="text-[10px] font-mono text-neutral-500 w-6 opacity-70 shrink-0">{ai}.</span>
+                  <span className="font-mono truncate flex-1 text-xs">{taskId}</span>
+                  <div className="flex gap-1 items-center shrink-0 ml-1">
+                    {isMis&&<span className="text-[9px] font-bold bg-red-900/50 text-red-400 px-1 rounded">MIS</span>}
+                    {hCh&&<div className="w-1.5 h-1.5 rounded-full bg-blue-500" title="Challenge"/>}
+                    {hSol&&<div className="w-1.5 h-1.5 rounded-full bg-purple-500" title="Solution"/>}
+                    {hDet&&lm!=null&&<span className={`text-[9px] font-mono font-bold px-1 rounded ${lp?'text-green-400 bg-green-500/10':'text-blue-400 bg-blue-500/10'}`}>{lp?'★':'○'}{Math.round(lm*100)}</span>}
+                    {hS1&&<div className="relative flex items-center justify-center ml-0.5">
+                      <div className={`w-2 h-2 rounded-full ${r1R?'bg-yellow-500':'border border-yellow-500/30'}`} title="Sub1"/>
+                      {s1St===true&&<CheckIcon className="w-3.5 h-3.5 text-green-400 absolute -top-1 -right-1.5 bg-neutral-900 rounded-full"/>}
+                      {s1St===false&&<XCircleIcon className="w-3.5 h-3.5 text-red-500 absolute -top-1 -right-1.5 bg-neutral-900 rounded-full"/>}
+                    </div>}
+                    {hS2&&<div className="relative flex items-center justify-center ml-1">
+                      <div className={`w-2 h-2 rounded-full ${r2R?'bg-teal-500':'border border-teal-500/30'}`} title="Sub2"/>
+                      {s2St===true&&<CheckIcon className="w-3.5 h-3.5 text-green-400 absolute -top-1 -right-1.5 bg-neutral-900 rounded-full"/>}
+                      {s2St===false&&<XCircleIcon className="w-3.5 h-3.5 text-red-500 absolute -top-1 -right-1.5 bg-neutral-900 rounded-full"/>}
+                    </div>}
+                  </div>
+                </button>
+              );
+            })}
+            {displayIds.length===0&&(
+              <div className="text-center text-neutral-500 mt-10 text-xs px-4">
+                {allTaskIds.length>0?'No tasks match current filters.':'Open a folder or upload files to begin.'}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main content ── */}
+      <div className="flex-1 flex flex-col h-full bg-neutral-900 overflow-hidden relative">
+        {error&&(
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-red-900/90 text-red-200 px-4 py-2 rounded-lg flex items-center gap-2 shadow-xl max-w-lg">
+            <AlertIcon className="w-5 h-5 shrink-0"/><span className="flex-1">{error}</span>
+            <button onClick={()=>setError(null)} className="text-red-300 hover:text-white ml-2 shrink-0">✕</button>
+          </div>
+        )}
+        {isExporting&&(
+          <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center">
+            <div className="bg-neutral-800 p-6 rounded-xl shadow-2xl max-w-sm w-full text-center space-y-4">
+              <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"/>
+              <h3 className="text-lg font-bold text-white">Exporting…</h3>
+              {exportProgress>0&&<div className="w-full bg-neutral-700 rounded-full h-2.5"><div className="bg-blue-500 h-2.5 rounded-full" style={{width:`${exportProgress}%`}}/></div>}
+            </div>
+          </div>
+        )}
+
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {selectedTaskId&&(challenges[selectedTaskId]||solutions[selectedTaskId]||submission1[selectedTaskId]||submission2[selectedTaskId]||detailedRuns[selectedTaskId])?(
+            <>
+              {/* Toolbar */}
+              <div className="h-12 border-b border-neutral-800 flex items-center justify-between px-4 shrink-0 bg-neutral-900/50 backdrop-blur">
+                <div className="flex items-center gap-3">
+                  <button onClick={()=>setIsSidebarOpen(v=>!v)} className="p-1.5 hover:bg-neutral-800 rounded-md text-neutral-400 hover:text-white transition-colors">
+                    <MenuIcon className="w-4 h-4"/>
+                  </button>
+                  <span className="text-sm font-mono text-neutral-500">Task {allTaskIds.indexOf(selectedTaskId)+1}:</span>
+                  <h2 className="text-xl font-bold font-mono tracking-tight">{selectedTaskId}</h2>
+                  {hasAnalysis&&<span className="bg-pink-500/20 text-pink-400 text-[10px] font-bold px-2 py-0.5 rounded border border-pink-500/30">Level: {complexityData[selectedTaskId]?.level??'?'}</span>}
+                  {detailedRuns[selectedTaskId]?.val_perfect&&<span className="bg-green-500/20 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded border border-green-500/30">★ Perfect LOO</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={()=>setShowDifferences(v=>!v)} className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-md text-xs font-medium border border-neutral-700 transition-colors">
+                    {showDifferences?<ToggleOnIcon className="w-4 h-4 text-green-400"/>:<ToggleOffIcon className="w-4 h-4 text-neutral-500"/>} Diffs
+                  </button>
+                  <div className="w-px h-5 bg-neutral-700"/>
+                  <button onClick={exportCurrentTask} className="flex items-center gap-2 px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 rounded-md text-xs font-medium transition-colors">
+                    <ImageIcon className="w-4 h-4"/> Save PNG
+                  </button>
+                  <button onClick={exportAllTasksToZip} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-xs font-medium transition-colors">
+                    <ArchiveIcon className="w-4 h-4"/> Export All (ZIP)
+                  </button>
+                </div>
+              </div>
+
+              {/* Content scroll area */}
+              <div className="flex-1 overflow-auto p-4 space-y-0 custom-scrollbar">
+                <TaskView
+                  taskId={selectedTaskId} challenges={challenges} solutions={solutions}
+                  sub1={submission1[selectedTaskId]} sub2={submission2[selectedTaskId]}
+                  sub1Name={sub1Name} sub2Name={sub2Name}
+                  overlayMode={overlayMode} showDifferences={showDifferences}
+                  activeTaskTrainAverages={activeTaskTrainAverages}
+                  run={detailedRuns[selectedTaskId]}
+                />
+                <RunDetailPanel run={detailedRuns[selectedTaskId]} challenges={challenges} taskId={selectedTaskId}/>
+              </div>
+            </>
+          ):(
+            <div className="flex-1 flex items-center justify-center text-neutral-500 flex-col gap-4">
+              <div className="absolute top-3 left-4">
+                <button onClick={()=>setIsSidebarOpen(v=>!v)} className="p-1.5 hover:bg-neutral-800 rounded-md text-neutral-400 hover:text-white transition-colors"><MenuIcon className="w-4 h-4"/></button>
+              </div>
+              <ImageIcon className="w-16 h-16 opacity-20"/>
+              <p>Select a task from the sidebar to visualize.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer stats */}
+        {stats.overall.total>0&&(
+          <div className={`bg-neutral-950 border-t border-neutral-800 shrink-0 transition-all duration-300 z-10 ${isBottomPanelOpen?'max-h-64':'max-h-11'} overflow-hidden shadow-[0_-10px_20px_rgba(0,0,0,0.3)] flex flex-col`}>
+            <div className="p-3 flex items-center justify-between cursor-pointer hover:bg-neutral-900/50 shrink-0" onClick={()=>setIsBottomPanelOpen(v=>!v)}>
+              <h3 className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+                <BarChartIcon className="w-3.5 h-3.5 text-blue-400"/> Score & Complexity Summary
+              </h3>
+              <button className="p-1 hover:bg-neutral-800 rounded-md text-neutral-400">
+                {isBottomPanelOpen?<ChevDownIcon className="w-4 h-4"/>:<ChevUpIcon className="w-4 h-4"/>}
+              </button>
+            </div>
+            {isBottomPanelOpen&&(
+              <div className="w-full overflow-y-auto custom-scrollbar px-3 pb-3">
+                <table className="w-full text-left text-xs whitespace-nowrap">
+                  <thead><tr className="text-neutral-500 border-b border-neutral-800">
+                    <th className="pb-1.5 font-medium px-2">Level</th>
+                    <th className="pb-1.5 font-medium px-2">Tasks</th>
+                    {hasSub1&&<th className="pb-1.5 font-medium px-2">Sub 1</th>}
+                    {hasSub2&&<th className="pb-1.5 font-medium px-2">Sub 2</th>}
+                  </tr></thead>
+                  <tbody className="divide-y divide-neutral-800/50">
+                    <tr className="bg-neutral-800/30 font-bold text-neutral-200">
+                      <td className="py-2 px-2 text-blue-400">Overall</td>
+                      <td className="py-2 px-2">{stats.overall.total}</td>
+                      {hasSub1&&<td className="py-2 px-2">{renderScore(stats.overall.s1Correct,stats.overall.total)}</td>}
+                      {hasSub2&&<td className="py-2 px-2">{renderScore(stats.overall.s2Correct,stats.overall.total)}</td>}
+                    </tr>
+                    {hasAnalysis&&Object.entries(stats.byLevel).sort(([a],[b])=>a.localeCompare(b,undefined,{numeric:true})).map(([lv,d])=>(
+                      <tr key={lv} className="hover:bg-neutral-800/20">
+                        <td className="py-1.5 px-2 text-neutral-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-pink-500/50 inline-block"/>Level {lv}</td>
+                        <td className="py-1.5 px-2 text-neutral-500 font-medium">{d.total}</td>
+                        {hasSub1&&<td className="py-1.5 px-2">{renderScore(d.s1Correct,d.total)}</td>}
+                        {hasSub2&&<td className="py-1.5 px-2">{renderScore(d.s2Correct,d.total)}</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

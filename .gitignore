@@ -1,0 +1,29 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+results/**/*.json
+!results/submissions/latest/.gitkeep
+!results/README.md
+
+external/models/
+external/TinyRecursiveModels/
+
+# Competition + derivative data (not ours to redistribute, also large).
+data/
+
+# Third-party reference notebook (NVARC); kept locally, not republished.
+notebooks/reference/
+
+# Archive forensics (kept locally, not republished).
+results/archive/
+notebooks/archive/
+
+*.log
+*.bz2
+*.pkl
+*.pt
+*.safetensors

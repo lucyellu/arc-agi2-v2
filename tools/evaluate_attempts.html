@@ -1,0 +1,107 @@
+def is_dummy_grid(grid):
+    """
+    Helper to detect if an attempt is just the default dummy [[0]] or is invalid.
+    """
+    # Convert numpy array to list of lists if necessary
+    if hasattr(grid, "tolist"):
+        grid = grid.tolist()
+        
+    if not grid or not isinstance(grid, list) or not isinstance(grid[0], list):
+        return True
+    
+    if len(grid) == 1 and len(grid[0]) == 1 and grid[0][0] == 0:
+        return True
+        
+    return False
+
+
+def grids_match(g1, g2):
+    """
+    Helper for deep array equality (grid matching).
+    """
+    # Convert numpy arrays to list of lists if necessary
+    if hasattr(g1, "tolist"): g1 = g1.tolist()
+    if hasattr(g2, "tolist"): g2 = g2.tolist()
+        
+    if not g1 or not g2 or not isinstance(g1, list) or not isinstance(g2, list):
+        return False
+    
+    # Python natively handles deep equality for lists of lists
+    return g1 == g2
+
+
+def get_similarity_stats(source, target):
+    """
+    Calculate similarity metrics between a source attempt grid and target expected grid.
+    Returns a dictionary with match counts, area sizes, percentage, and color diffs.
+    """
+    # Convert numpy arrays to list of lists if necessary
+    if hasattr(source, "tolist"): source = source.tolist()
+    if hasattr(target, "tolist"): target = target.tolist()
+        
+    if not source or not target or not source[0] or not target[0]:
+        return None
+
+    r_s, c_s = len(source), len(source[0])
+    r_t, c_t = len(target), len(target[0])
+
+    matches = 0
+    hist_s = [0] * 10
+    hist_t = [0] * 10
+
+    # Build histogram for source grid
+    for r in range(r_s):
+        for c in range(c_s):
+            color = source[r][c]
+            if 0 <= color <= 9:  # Safety bounds check for ARC colors
+                hist_s[color] += 1
+
+    # Build histogram for target grid and calculate spatial matches
+    for r in range(r_t):
+        for c in range(c_t):
+            color = target[r][c]
+            if 0 <= color <= 9:
+                hist_t[color] += 1
+            
+            # Check for exact positional match where grids overlap
+            if r < r_s and c < c_s and source[r][c] == target[r][c]:
+                matches += 1
+
+    source_area = r_s * c_s
+    target_area = r_t * c_t
+    max_area = max(source_area, target_area)
+    
+    similarity_pct = (matches / max_area) * 100.0 if max_area > 0 else 0.0
+
+    # Calculate differences in color distributions
+    color_diffs = []
+    for i in range(10):
+        if hist_s[i] != hist_t[i]:
+            color_diffs.append({
+                "color": i, 
+                "diff": hist_s[i] - hist_t[i]
+            })
+
+    return {
+        "matches": matches,
+        "sourceArea": source_area,
+        "targetArea": target_area,
+        "similarityPct": similarity_pct,
+        "sizeMatch": (r_s == r_t) and (c_s == c_t),
+        "colorDiffs": color_diffs
+    }
+
+# ==========================================
+# Example Usage in a Kaggle Notebook Cell:
+# ==========================================
+if __name__ == "__main__":
+    attempt_grid = [[1, 1, 2], [3, 0, 0]]
+    expected_grid = [[1, 1, 2], [3, 3, 3]]
+    
+    print(f"Is dummy? {is_dummy_grid(attempt_grid)}")
+    print(f"Exact match? {grids_match(attempt_grid, expected_grid)}")
+    
+    stats = get_similarity_stats(attempt_grid, expected_grid)
+    print(f"Similarity: {stats['similarityPct']:.2f}%")
+    print(f"Squares correct: {stats['matches']} / {stats['targetArea']}")
+    print(f"Color differences: {stats['colorDiffs']}")

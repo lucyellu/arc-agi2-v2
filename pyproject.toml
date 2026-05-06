@@ -1,0 +1,32 @@
+[project]
+name = "agi2-v2"
+version = "0.1.0"
+description = "Clean ARC-AGI-2 2026 experimentation workspace"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy",
+  "pillow",
+]
+
+[project.optional-dependencies]
+qwen = [
+  "torch",
+  "transformers",
+  "peft",
+  "bitsandbytes",
+]
+trm = [
+  "torch",
+  "hydra-core",
+  "omegaconf",
+  "pydantic",
+  "tqdm",
+  "coolname",
+  "adam-atan2-pytorch",
+]
+dev = [
+  "pytest",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
