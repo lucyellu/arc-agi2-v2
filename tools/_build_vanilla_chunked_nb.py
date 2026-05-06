@@ -127,7 +127,7 @@ import time
 # the separated chunk's keys. Pair with the matching separated chunk for a
 # direct grouped-vs-separated comparison.
 CHUNK_SIZE = int(os.getenv(\"AGI2_CHUNK_SIZE\", \"4\"))
-CHUNK_INDEX = int(os.getenv(\"AGI2_CHUNK_INDEX\", \"0\"))
+CHUNK_INDEX = int(os.getenv(\"AGI2_CHUNK_INDEX\", \"1\"))
 RUN_HOURS = float(os.getenv(\"AGI2_RUN_HOURS\", \"1.5\"))
 
 global_end_time = time.time() + RUN_HOURS * 3600 - 300

@@ -123,7 +123,7 @@ cell0_src = """import os
 import time
 
 CHUNK_SIZE = int(os.getenv(\"AGI2_CHUNK_SIZE\", \"4\"))   # originals per chunk
-CHUNK_INDEX = int(os.getenv(\"AGI2_CHUNK_INDEX\", \"0\"))
+CHUNK_INDEX = int(os.getenv(\"AGI2_CHUNK_INDEX\", \"1\"))
 RUN_HOURS = float(os.getenv(\"AGI2_RUN_HOURS\", \"2.0\"))
 
 global_end_time = time.time() + RUN_HOURS * 3600 - 300
