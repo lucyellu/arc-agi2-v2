@@ -10,10 +10,9 @@ Live status. Update when something completes or changes status. Sister doc: `PLA
 
 **Why it might not:** if vanilla failures on multi-test puzzles are capability-bound rather than budget-bound, isolation gains nothing.
 
-**Status as of chunks 0+1+2:** Two-axis comparison, not a single "winner":
-
-- **Accuracy:** vanilla 4/25 (16%), separated 3/25 (12%). Single-subtest difference comes entirely from `20270e3b_1` (chunk 1), which vanilla solved on attempt_2 and separated missed. Every other solved subtest is a tie. **No "vanilla miss → separated solve" datapoints yet.**
-- **Wall time:** separated 19 min vs vanilla 28 min on chunk 2, but only because vanilla idled 3 of 4 workers. At 240-puzzle scale workers saturate. Empirical reference: base notebook does the full set in ~3–4h on L4x4. Realistic r2: vanilla ~4h, separated ~5h. Both well under 12h. Hybrid speed argument is weak; only an accuracy win where vanilla misses would justify it (none yet).
+**Status as of chunks 0+1+2:**
+- **Accuracy:** vanilla 4/25, separated 3/25. Single-subtest gap from `20270e3b_1` only. **No "vanilla miss → separated solve" yet.**
+- **Both fit 12h leaderboard cap easily** (base notebook reference: ~3–4h on full 240).
 
 See "Verified findings" below for per-chunk detail.
 
@@ -23,7 +22,7 @@ Nothing — chunks 0+1+2 packaged. Next push is chunk 3 (problems 13–16: `36a0
 
 ## Leaderboard environment
 
-4× L4 GPUs, 12h wall, 240 hidden tasks (120 semi-private + 120 private), no internet. Same hardware as dev runs. Source: https://arcprize.org/competitions/2026/arc-agi-2. Empirical: the base notebook completes the full set in ~3–4h. Blocker before submitting: `RUN_HOURS=3.0/4.0` defaults are tight against that — bump to ~6h vanilla / ~7h separated for safety margin.
+4× L4 GPUs, 12h wall, 240 hidden tasks, no internet. Same hardware as dev runs. Source: https://arcprize.org/competitions/2026/arc-agi-2. Before leaderboard submission: bump `RUN_HOURS` (defaults 3.0/4.0 too tight vs ~3–4h baseline) — env override in rerun mode.
 
 ## Verified findings (with dates)
 
@@ -44,17 +43,14 @@ Nothing — chunks 0+1+2 packaged. Next push is chunk 3 (problems 13–16: `36a0
 
 ### r2 design (chunk 2, doubled budget — current)
 
-- **r2 chunk 2 separated (8 subtests, originals `221dfab4`/`247ef758`/`269e22fb`/`2d0172a1`):** **2/8 — both subtests of `2d0172a1` (problem 12)** via attempt_1, rank 1 each. 8/8 attempted (no skips — `apply_puzzle_timeout` fix paid off). Mirror loaded correctly. 0/8 discarded. Wall 18.9 min.
-- **r2 chunk 2 vanilla:** **2/8 — same `2d0172a1` both subtests, both attempt_1.** 8/8 attempted, 0/8 discarded. Wall 28.2 min. Per-puzzle finishes: `269e22fb` 4.7m, `247ef758` 6.8m, `2d0172a1` 7.3m, **`221dfab4` 22.0m** — single hard puzzle bottlenecked the wall (TTT only 62s; the 21 min was DFS decode, hitting the new 1080s cap).
-- **Chunk 2 net:** both arms tied at 2/8. No isolation gain, no regression. Same puzzle solved both times. Per-subtest avg time: vanilla ~14 min, separated ~9.5 min — separated 50% faster on the same content because subtests parallelize across workers instead of serializing inside a single puzzle.
+- **r2 chunk 2 (8 subtests, originals 9–12):** both arms 2/8, same puzzle (`2d0172a1` both subtests). 8/8 attempted in both, 0/8 discarded. `apply_puzzle_timeout` (DFS 540→1080s, puzzle 1200→2400s) eliminated the chunk-1-style budget skips.
 
 ### Cumulative (chunks 0+1+2)
 
-- Vanilla: 4/25 (16%) — `1ae2feb7_2`, `20270e3b_1` (chunk 1); `2d0172a1_0`, `2d0172a1_1` (chunk 2).
-- Separated: 3/25 (12%) — `1ae2feb7_2` (chunk 1); `2d0172a1_0`, `2d0172a1_1` (chunk 2).
-- Per-puzzle: of the 12 multi-test originals attempted, 3 had at least one subtest solved (`1ae2feb7`, `20270e3b`, `2d0172a1`); the other 9 were all-miss in both arms.
-- **No "vanilla miss → separated solve" cases yet.** One regression (`20270e3b_1` vanilla solved, separated missed).
-- **Separated is faster per-unit-of-work** but covers the same accuracy. Hybrid time-advantage hypothesis (PLAN.md P5) deferred until more chunks land.
+- Vanilla 4/25: `1ae2feb7_2`, `20270e3b_1`, `2d0172a1_0`, `2d0172a1_1`.
+- Separated 3/25: `1ae2feb7_2`, `2d0172a1_0`, `2d0172a1_1`.
+- Diff: vanilla solved `20270e3b_1` only.
+- 9 of 12 multi-test originals are all-miss in both arms.
 
 ## Active artifacts
 
