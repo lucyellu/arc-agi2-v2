@@ -53,18 +53,9 @@ Optional dependency groups are declared in `pyproject.toml`:
 
 ARC-AGI-2 challenges/solutions JSON lives under `data/arc-prize-2026-arc-agi-2/`. The eval set is **120 puzzles / 172 subtests** (multi-test puzzles count multiple subtests). Kaggle's leaderboard test set (240 puzzles = 120 semi-private + 120 private, ~340 subtests) is *not* in the repo — every local score number is the eval-set score. `score_submissions.py` is fixed to count all subtests, not just the first per puzzle, so its numbers will not match the original `agi-2` scorer.
 
-### Leaderboard / rerun environment (confirmed 2026-05-06 via arcprize.org)
+### Leaderboard / rerun environment
 
-Same hardware for dev "Save Version" runs and competition rerun:
-
-- **4× NVIDIA L4 GPUs** (`machine_shape: NvidiaL4x4`).
-- **12-hour wall-clock cap** per submission.
-- **240 hidden tasks** during competition rerun (`KAGGLE_IS_COMPETITION_RERUN=true`).
-- **No internet access** during rerun.
-
-Worker count from `mp.spawn(..., nprocs=min(4, max(1, torch.cuda.device_count())))` matches the L4x4 spec. Reasoning about rerun budgets/parallelism in this repo assumes 4 workers.
-
-Source: https://arcprize.org/competitions/2026/arc-agi-2.
+4× L4 GPUs, 12h cap, 240 hidden tasks, no internet. Same hardware as dev runs. Source: https://arcprize.org/competitions/2026/arc-agi-2.
 
 A submission is `{ puzzle_id: [ {"attempt_1": grid, "attempt_2": grid}, ... per test ] }`. `_attempt_pair()` in `score_submissions.py` also accepts the list shape `[grid1, grid2]`. A subtest is correct if either attempt matches the solution.
 

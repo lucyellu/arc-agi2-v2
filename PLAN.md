@@ -8,11 +8,11 @@ Open questions and next experiments. Sister doc: `STATE.md` (current status, art
 
 2. **Is the selection algorithm sometimes the bottleneck?** Yes — confirmed on `1ae2feb7_1` (chunk 1 vanilla) where the right answer was at rank 7. Chunks 0 and 2 had 0/16 discarded, so the rate is puzzle-dependent. Worth a separate experiment: bump `n_guesses=2` to 3 or 5 and see if a few discarded answers get recovered cheaply.
 
-3. **Is separated genuinely *faster* per unit work even if not more accurate?** Chunk-2 datapoint (4 puzzles on 4 workers): separated 19 min vs vanilla 28 min — separated wins **only because vanilla idles 3 of 4 workers** while one chews a 22-min outlier (`221dfab4`). The chunk-2 ratio 0.68 does NOT extrapolate to leaderboard scale (240 puzzles on 4 workers, hardware confirmed L4x4 12h via arcprize.org). At 60–85 units per worker, no worker idles, total work dominates wall, and separated's ~17% extra TTT cost (per-subtest fine-tunes instead of amortized per-puzzle) makes it *slightly* slower than vanilla at scale — vanilla ~9h max-worker vs separated ~10h. Both fit 12h; vanilla has more margin. **The time-advantage hybrid argument is therefore weak.** Hybrid only justifies itself if separated wins on accuracy somewhere chunks 3–12 — currently zero such datapoints.
+3. **Is separated faster than vanilla?** At small N (chunk 2, 4 puzzles on 4 workers): yes, 19 vs 28 min — but only because vanilla idled 3 workers. At leaderboard scale (240 on 4): no, workers saturate and separated's extra TTT cost makes it slightly slower (~10h vs ~9h max-worker, both fitting 12h). Time-advantage hybrid argument is weak; defer until accuracy data from chunks 3–12.
 
 4. **Why don't `[EarlyStopOnLowLoss]` diagnostic prints appear in r1/r2 logs?** The class is in the .ipynb source, `callbacks=[EarlyStopOnLowLoss(...)]` is wired, training losses (0.017–0.162) cross the 0.05 threshold, but the callback's print never reaches the log. Either Unsloth's `UnslothFixedTrainer` filters callbacks, or `on_log` isn't called by the Unsloth-monkeypatched trainer. Tuning the threshold blind is unwise until understood.
 
-5. **What `puzzle_timeout` and `RUN_HOURS` would survive the 12-hour Kaggle competition rerun?** Hardware confirmed: 4× NVIDIA L4, 12h wall, 240 hidden tasks. Realistic estimates from chunk-2 datapoints applied to mixed n=1/n=2/n=3 distribution: vanilla ~9h max-worker, separated ~10h max-worker. Both fit 12h. **The actual blocker is `RUN_HOURS=3.0/4.0`** — those defaults were sized for 4-puzzle chunks; they will cap rerun execution at 3-4 hours and skip the rest. Bump to ~10 in rerun mode (env override or build-time conditional). `puzzle_timeout=2400s` is fine to leave (only ~5% of subtests will hit it).
+5. **What budgets survive the 12h rerun?** Both kernels fit (vanilla ~9h, separated ~10h). The blocker is `RUN_HOURS=3.0/4.0` defaults — sized for 4-puzzle chunks; would cap rerun and skip remaining tasks. Bump to ~10h in rerun mode. `puzzle_timeout=2400s` is fine.
 
 ## Next experiments (priority order)
 
@@ -57,9 +57,7 @@ After P4, we have full chunks 0–12 coverage on the 49 multi-test originals (10
 
 ### P5 — Hybrid ensemble for final submission (user 2026-05-06)
 
-**Hypothesis revised after L4x4-confirmed scaling math:** the chunk-2 wall-time advantage for separated (19 min vs 28 min) was an artifact of vanilla idling 3 of 4 workers — at leaderboard scale (240 puzzles on the same 4 workers) no worker idles, total work dominates, and vanilla ends up ~1h faster wall-time than separated (~9h vs ~10h, both fitting 12h). So the time argument for hybrid is weak. The accuracy argument is also currently null (no "vanilla miss → separated solve" wins yet). **Defer P5 until chunks 3–12 supply data either way.** If separated never wins where vanilla misses, abandon the hybrid; submit vanilla.
-
-If we do build P5 anyway:
+Defer until chunks 3–12 supply accuracy data. The chunk-2 time advantage for separated doesn't survive scaling (open Q3); the accuracy argument is currently null. If we do build it:
 - Run vanilla on all 240 test puzzles with a **tighter** `puzzle_timeout` (~720s) so it covers everything in 12 h.
 - Identify puzzles vanilla skipped or used the full cap on (likely the n≥3 multi-test originals + a few hard n=2 ones).
 - Run separated only on those, with the looser cap (since fewer puzzles = more headroom per).
@@ -78,13 +76,11 @@ Useful before tuning the threshold or relying on early stopping for the leaderbo
 
 ### P7 — Leaderboard submission build
 
-The r2 notebooks already detect `KAGGLE_IS_COMPETITION_RERUN` and produce a full-shape `submission.json` over the 240 hidden tasks. **Hardware confirmed:** 4× NVIDIA L4, 12h cap, 240 tasks (per arcprize.org). Outstanding work:
+The r2 notebooks already detect `KAGGLE_IS_COMPETITION_RERUN` and produce a 240-shape `submission.json`. Outstanding:
 
-- **Bump `RUN_HOURS` for rerun mode** (3.0/4.0 → ~10h). Cleanest implementation: env-var override in `cell_run_src` when `RERUN_MODE=true`. Without this, the kernel will hit the dev cap and skip remaining puzzles after 3-4 hours.
-- **Manual web-UI attach** on whichever slug we submit (competition + mirror dataset + unsloth-patch kernel; separated kernel additionally needs the separated dataset only in dev mode — rerun builds inline).
-- **Decide which kernel to submit** — based on accuracy + speed analysis above, vanilla (`subprobs-vanilla120-r2`) is the current default. **User decision (2026-05-06): submit both kernels and let the leaderboard decide empirically** — math is close enough that simulation can't determine the winner; one paid Kaggle eval per kernel resolves it.
-
-Run after P4 (chunks 3–12) gives a clearer accuracy picture, OR submit immediately after the `RUN_HOURS` rerun bump if we want to settle the time-vs-accuracy question fast.
+- Bump `RUN_HOURS` to ~10h in rerun mode (env override in `cell_run_src` or build-time conditional). Without this, dev cap fires at 3-4h and skips remaining tasks.
+- Manual web-UI attach on the submission slug.
+- **Plan: submit both kernels** (user 2026-05-06) — math too close to predict; let the leaderboard resolve empirically.
 
 ### P8 — Selection-algorithm tweak (open Q2)
 
