@@ -128,6 +128,32 @@ def apply_model_resolver(solver_src):
     return src.replace(MARKER, MARKER + RESOLVER_FN, 1)
 
 
+def apply_puzzle_timeout(solver_src, dfs_timeout=1080, puzzle_timeout=2400):
+    """Bump the hardcoded decode-budget literals in the base notebook's
+    arc_solver.py cell.
+
+    The base uses two hardcoded constants:
+      - turbo_dfs DFS-loop budget: `< 540 and time.time() < end_time:`
+      - worker per-puzzle cap:     `if spend_time > 1200 or ...`
+
+    The per-puzzle cap is shared across a multi-test puzzle's subtests, so a
+    tight 1200s cap causes blank subtest[1] when subtest[0] eats the budget.
+    Doubling buys headroom for n=2/n=3 puzzles. Default doubles both: DFS
+    540 -> 1080, puzzle 1200 -> 2400.
+    """
+    OLD_DFS = "while time.time() - start_time < 540 and time.time() < end_time:"
+    NEW_DFS = f"while time.time() - start_time < {dfs_timeout} and time.time() < end_time:"
+    OLD_PZL = "if spend_time > 1200 or time.time() > end_time:"
+    NEW_PZL = f"if spend_time > {puzzle_timeout} or time.time() > end_time:"
+    if OLD_DFS not in solver_src:
+        raise AssertionError("DFS-budget literal `< 540 and time.time()` not found in arc_solver.py")
+    if OLD_PZL not in solver_src:
+        raise AssertionError("per-puzzle cap literal `spend_time > 1200` not found in arc_solver.py")
+    src = solver_src.replace(OLD_DFS, NEW_DFS).replace(OLD_PZL, NEW_PZL)
+    print(f"[apply_puzzle_timeout] DFS 540->{dfs_timeout}s, puzzle 1200->{puzzle_timeout}s", flush=True)
+    return src
+
+
 def apply_early_stop(solver_src):
     """Add EarlyStopOnLowLoss callback to TTT.
 

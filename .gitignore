@@ -27,3 +27,13 @@ notebooks/archive/
 *.pkl
 *.pt
 *.safetensors
+*.zip
+
+# Inference / compile artifacts inside packaged kernel results — keep the
+# folder structure (.py source snapshots, reports, submission JSON) but
+# skip the bulky decoded grids and unsloth-generated trainer files.
+results/**/grouped_outputs/
+results/**/separated_outputs/
+results/**/inference_outputs/
+results/**/unsloth_compiled_cache/
+results/**/__pycache__/

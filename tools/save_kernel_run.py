@@ -40,7 +40,7 @@ def main():
     args = ap.parse_args()
 
     owner, slug = args.kernel.split("/", 1)
-    folder_name = f"results_{slug}-{args.duration}-{args.descriptor}"
+    folder_name = f"results_{slug}-{args.descriptor}-{args.duration}"
     out = ROOT / "results" / folder_name
     out.mkdir(parents=True, exist_ok=True)
     print(f"Target: {out}")
@@ -77,7 +77,7 @@ def main():
     )
     # `kernels pull` saves as <slug>.ipynb (with hyphens not underscores).
     pulled = out / f"{slug}.ipynb"
-    target = out / f"{slug}-{args.duration}-{args.descriptor}.ipynb"
+    target = out / f"{slug}-{args.descriptor}-{args.duration}.ipynb"
     if pulled.exists() and pulled != target:
         shutil.move(str(pulled), str(target))
     # Some kernels save with underscored variants — handle both.

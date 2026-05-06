@@ -225,7 +225,7 @@ def main():
         lines.append("No correct answers found in any candidate list. Pure capability/budget failures, not selection.")
     lines.append("")
     lines.append("Candidate-count breadth is also informative: a subtest with only 1–3 unique grids was under-explored (decode budget hit, max_score threshold too tight, or DFS branches died early). Subtests with 12+ unique grids that still missed are pure capability failures — the model explored a wide search but couldn't find the answer.")
-    md_path.write_text("\n".join(lines))
+    md_path.write_text("\n".join(lines), encoding="utf-8")
     print(f"Saved MD:   {md_path}")
 
 
