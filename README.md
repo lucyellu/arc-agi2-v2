@@ -1,4 +1,25 @@
-# agi2-v2
+# ARC-AGI-2 (ARC Prize 2026)
+
+My workspace for the [ARC Prize 2026](https://arcprize.org/competitions/2026/arc-agi-2) Kaggle
+competition: abstract-reasoning puzzles where a model sees a few input/output grid pairs and must
+infer the rule.
+
+**Approach:** Qwen3-4B with test-time training (TTT), building on NVARC, the 2025 winning approach.
+Best public leaderboard score: **28.19%**, above NVARC's 27.64%.
+
+**Current experiment:** does splitting multi-test puzzles into single-test puzzles, each with its
+own fresh fine-tune, recover subtests the grouped approach misses? So far (25 subtests): grouped
+4/25, separated 3/25. No case yet where splitting solves something grouped missed.
+
+**Findings along the way:**
+- The inherited scorer undercounted multi-test puzzles. It now scores all 172 eval subtests.
+- Answer selection is sometimes the bottleneck: on `1ae2feb7_1` the right answer was generated but
+  ranked 7th and discarded.
+
+Live status: [`STATE.md`](STATE.md). Open questions and next experiments: [`PLAN.md`](PLAN.md).
+Viewer: [arc-agi2-viewer](https://github.com/lucyellu/arc-agi2-viewer) ([live](https://arc-agi2-viewer.netlify.app/)).
+
+## Workspace
 
 Fresh ARC-AGI-2 workspace distilled from `agi-2`.
 
