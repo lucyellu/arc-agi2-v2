@@ -7,6 +7,14 @@ infer the rule.
 **Approach:** Qwen3-4B with test-time training (TTT), building on NVARC, the 2025 winning approach.
 My best public leaderboard score was **28.19%** (May 2026), using the same stack NVARC won with in 2025 (27.64%).
 
+**Method idea: ARC-NEST (nested evaluation).** Standard test-time training fine-tunes blind, with no
+way to check whether the model has learned the rule before it answers. But every ARC task's training
+pairs have known outputs. For a task with N ≥ 3 examples, hide one and train on the other N−1: the
+hidden pair becomes a graded practice question, available even on the private test set. Wrong
+attempts are fed back as labelled negatives (`# WRONG ATTEMPT`), and LoRA weights carry forward
+across a task's practice variants. 62 of the 120 eval tasks qualify. Draft write-up, ablations not
+yet run: [`docs/arcnest_paper_001.txt`](docs/arcnest_paper_001.txt).
+
 **Current experiment:** does splitting multi-test puzzles into single-test puzzles, each with its
 own fresh fine-tune, recover subtests the grouped approach misses? So far (25 subtests): grouped
 4/25, separated 3/25. No case yet where splitting solves something grouped missed.
