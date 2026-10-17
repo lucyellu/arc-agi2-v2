@@ -5,7 +5,7 @@ competition: abstract-reasoning puzzles where a model sees a few input/output gr
 infer the rule.
 
 **Approach:** Qwen3-4B with test-time training (TTT), building on NVARC, the 2025 winning approach.
-Best public leaderboard score: **28.19%**, above NVARC's 27.64%.
+My best public leaderboard score was **28.19%** (May 2026), using the same stack NVARC won with in 2025 (27.64%).
 
 **Current experiment:** does splitting multi-test puzzles into single-test puzzles, each with its
 own fresh fine-tune, recover subtests the grouped approach misses? So far (25 subtests): grouped
